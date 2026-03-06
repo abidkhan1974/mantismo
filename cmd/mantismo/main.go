@@ -34,6 +34,7 @@ func newRootCmd() *cobra.Command {
 		newPolicyCmd(),
 		newVaultCmd(),
 		newDashboardCmd(),
+		newDoctorCmd(),
 	)
 
 	return root
@@ -205,9 +206,21 @@ func newVaultCmd() *cobra.Command {
 		&cobra.Command{Use: "delete", Short: "Delete a vault entry", RunE: notImplemented},
 		&cobra.Command{Use: "export", Short: "Export vault data (decrypted, for backup)", RunE: notImplemented},
 		&cobra.Command{Use: "lock", Short: "Lock the vault", RunE: notImplemented},
+		&cobra.Command{Use: "unlock", Short: "Unlock the vault (enter passphrase)", RunE: notImplemented},
 	)
 
 	return cmd
+}
+
+func newDoctorCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "doctor",
+		Short: "Validate Mantismo installation and environment",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Fprintln(os.Stderr, "Not implemented yet")
+			return nil
+		},
+	}
 }
 
 func newDashboardCmd() *cobra.Command {

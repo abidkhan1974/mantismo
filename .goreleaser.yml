@@ -1,0 +1,53 @@
+version: 2
+
+project_name: mantismo
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mantismo
+    main: ./cmd/mantismo/
+    binary: mantismo
+    env:
+      - CGO_ENABLED=1  # Required for SQLCipher vault storage
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+brews:
+  - repository:
+      owner: inferalabs
+      name: homebrew-tap
+    homepage: "https://github.com/inferalabs/mantismo"
+    description: "Eyes on every agent — a personal firewall for AI agents"
+    license: "Apache-2.0"
+    install: |
+      bin.install "mantismo"
+    test: |
+      system "#{bin}/mantismo", "--version"
