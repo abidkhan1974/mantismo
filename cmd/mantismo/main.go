@@ -2,10 +2,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/inferalabs/mantismo/internal/api"
+	"github.com/inferalabs/mantismo/internal/config"
+	"github.com/inferalabs/mantismo/internal/fingerprint"
+	"github.com/inferalabs/mantismo/internal/logger"
 )
 
 // version is injected at build time via -ldflags.
@@ -55,8 +65,105 @@ func newWrapCmd() *cobra.Command {
 		Example: `  mantismo wrap -- npx -y @modelcontextprotocol/server-github
   mantismo wrap --preset paranoid -- python my_mcp_server.py`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(os.Stderr, "Not implemented yet")
-			return nil
+			if len(args) == 0 {
+				return fmt.Errorf("wrap requires a command: mantismo wrap -- <command> [args...]")
+			}
+
+			// Load configuration.
+			cfg, err := config.LoadConfig(configPath)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+
+			// Override port from flag if explicitly set.
+			if port != 7777 || cfg.API.Port == 0 {
+				cfg.API.Port = port
+			}
+
+			// Apply preset override.
+			if preset != "" {
+				cfg.Policy.Preset = preset
+			}
+
+			// Set up data directory.
+			dataDir := cfg.DataDir
+			if err := os.MkdirAll(dataDir, 0700); err != nil {
+				return fmt.Errorf("create data dir: %w", err)
+			}
+			logDir := filepath.Join(dataDir, "logs")
+
+			// Session ID based on timestamp.
+			sessionID := fmt.Sprintf("sess-%d", time.Now().UnixNano())
+
+			// Create logger.
+			log, err := logger.New(logDir, sessionID)
+			if err != nil {
+				return fmt.Errorf("init logger: %w", err)
+			}
+			defer log.Close()
+
+			// Create fingerprint store.
+			fpPath := filepath.Join(dataDir, "fingerprints.json")
+			fpStore, err := fingerprint.NewStore(fpPath)
+			if err != nil {
+				return fmt.Errorf("init fingerprint store: %w", err)
+			}
+
+			// Create session store.
+			sessions := api.NewSessionStore()
+			sessions.SetActive(&api.SessionInfo{
+				ID:        sessionID,
+				StartedAt: time.Now().UTC(),
+				ServerCmd: args[0],
+			})
+			defer sessions.EndActive()
+
+			// Create and start the API server.
+			apiCfg := api.Config{
+				Port:     cfg.API.Port,
+				BindAddr: cfg.API.BindAddr,
+			}
+			approvalCh := make(chan api.ApprovalRequest, 16)
+			deps := api.Dependencies{
+				Logger:       log,
+				LogDir:       logDir,
+				Fingerprints: fpStore,
+				ApprovalCh:   approvalCh,
+				Sessions:     sessions,
+			}
+			apiSrv := api.NewServer(apiCfg, deps)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			if err := apiSrv.Start(ctx); err != nil {
+				return fmt.Errorf("start api server: %w", err)
+			}
+
+			fmt.Fprintf(os.Stderr, "[mantismo] API server listening on http://%s\n", apiSrv.Addr())
+			fmt.Fprintf(os.Stderr, "[mantismo] wrapping: %v\n", args)
+			fmt.Fprintf(os.Stderr, "[mantismo] policy preset: %s\n", cfg.Policy.Preset)
+			fmt.Fprintf(os.Stderr, "[mantismo] session: %s\n", sessionID)
+
+			// Suppress unused variable warnings.
+			_ = logLevel
+			_ = noPolicy
+			_ = noVault
+
+			// Wait for SIGINT/SIGTERM.
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+			select {
+			case sig := <-sigCh:
+				fmt.Fprintf(os.Stderr, "\n[mantismo] received %s, shutting down\n", sig)
+				cancel()
+			case <-ctx.Done():
+			}
+
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer stopCancel()
+			return apiSrv.Stop(stopCtx)
 		},
 	}
 
@@ -66,14 +173,6 @@ func newWrapCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noVault, "no-vault", false, "Disable vault tools injection")
 	cmd.Flags().IntVar(&port, "port", 7777, "API server port")
 	cmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
-
-	// Suppress unused variable warnings
-	_ = preset
-	_ = logLevel
-	_ = noPolicy
-	_ = noVault
-	_ = port
-	_ = configPath
 
 	return cmd
 }
