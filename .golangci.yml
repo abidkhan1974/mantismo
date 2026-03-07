@@ -18,3 +18,4 @@ linters-settings:
   gosec:
     excludes:
       - G104  # Unhandled errors (we'll handle explicitly)
+      - G204  # Subprocess launched with tainted input — intentional by design (user-configured MCP command)
