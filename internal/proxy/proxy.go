@@ -183,9 +183,12 @@ func (p *Proxy) Run(ctx context.Context) error {
 
 			out, herr := p.handler(raw, FromServer)
 			if herr != nil {
-				// From-server handler errors are non-fatal; log and continue.
+				// From-server handler errors: log and drop the message.
+				// Dropping (not forwarding) is intentional — the handler
+				// signalled that this content must not reach the host
+				// (e.g., sampling/createMessage blocked by policy).
 				fmt.Fprintf(os.Stderr, "[proxy] handler error (from server): %v\n", herr)
-				out = raw // forward original
+				continue
 			}
 			if out == nil {
 				continue
