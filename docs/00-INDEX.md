@@ -81,7 +81,7 @@ Each document is numbered and self-contained. Feed them to Claude Code in order.
 
 - **Acceptance criteria** are written as testable assertions (`GIVEN / WHEN / THEN`)
 - **Interface contracts** define exact function signatures, types, and error codes
-- **File paths** are relative to the Go module root (`github.com/inferalabs/mantismo`)
+- **File paths** are relative to the Go module root (`github.com/abidkhan1974/mantismo`)
 - **Error handling** follows Go conventions: return `(result, error)`, never panic
 - **Logging** uses `slog` (Go stdlib structured logging)
 - **Configuration** uses TOML files (`~/.mantismo/config.toml`)

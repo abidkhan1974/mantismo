@@ -15,7 +15,7 @@ Initialize the Go project with module structure, dependencies, Makefile, CI conf
 ### 3.1 Initialize Go Module
 
 ```bash
-go mod init github.com/inferalabs/mantismo
+go mod init github.com/abidkhan1974/mantismo
 ```
 
 ### 3.2 Create Directory Structure

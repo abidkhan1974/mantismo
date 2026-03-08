@@ -62,9 +62,9 @@ changelog:
 
 brews:
   - repository:
-      owner: inferalabs
+      owner: abidkhan1974
       name: homebrew-tap
-    homepage: "https://github.com/inferalabs/mantismo"
+    homepage: "https://github.com/abidkhan1974/mantismo"
     description: "Eyes on every agent"
     license: "Apache-2.0"
     install: |
@@ -78,7 +78,7 @@ brews:
 ### Homebrew (macOS + Linux)
 
 ```bash
-brew tap inferalabs/tap
+brew tap abidkhan1974/homebrew-tap
 brew install mantismo
 ```
 
@@ -86,11 +86,11 @@ brew install mantismo
 
 ```bash
 # macOS Apple Silicon
-curl -sSL https://github.com/inferalabs/mantismo/releases/latest/download/mantismo_darwin_arm64.tar.gz | tar xz
+curl -sSL https://github.com/abidkhan1974/mantismo/releases/latest/download/mantismo_darwin_arm64.tar.gz | tar xz
 sudo mv mantismo /usr/local/bin/
 
 # Linux amd64
-curl -sSL https://github.com/inferalabs/mantismo/releases/latest/download/mantismo_linux_amd64.tar.gz | tar xz
+curl -sSL https://github.com/abidkhan1974/mantismo/releases/latest/download/mantismo_linux_amd64.tar.gz | tar xz
 sudo mv mantismo /usr/local/bin/
 ```
 
@@ -101,7 +101,7 @@ Create `install.sh`:
 #!/bin/sh
 set -e
 
-REPO="inferalabs/mantismo"
+REPO="abidkhan1974/mantismo"
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
@@ -120,7 +120,7 @@ sudo mv /tmp/mantismo /usr/local/bin/
 echo "Mantismo installed successfully. Run 'mantismo --version' to verify."
 ```
 
-Usage: `curl -sSL https://raw.githubusercontent.com/inferalabs/mantismo/main/install.sh | sh`
+Usage: `curl -sSL https://raw.githubusercontent.com/abidkhan1974/mantismo/main/install.sh | sh`
 
 ## CGo Cross-Compilation (SQLCipher)
 
