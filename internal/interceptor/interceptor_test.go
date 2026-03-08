@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/inferalabs/mantismo/internal/interceptor"
-	"github.com/inferalabs/mantismo/internal/proxy"
+	"github.com/abidkhan1974/mantismo/internal/interceptor"
+	"github.com/abidkhan1974/mantismo/internal/proxy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

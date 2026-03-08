@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/inferalabs/mantismo/internal/interceptor"
+	"github.com/abidkhan1974/mantismo/internal/interceptor"
 )
 
 // ToolFingerprint holds the stored hash and metadata for a single tool.

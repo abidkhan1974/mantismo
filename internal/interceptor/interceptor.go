@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/inferalabs/mantismo/internal/proxy"
+	"github.com/abidkhan1974/mantismo/internal/proxy"
 )
 
 // Interceptor implements proxy.MessageHandler using MCP-aware routing.

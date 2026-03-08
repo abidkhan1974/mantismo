@@ -14,16 +14,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/inferalabs/mantismo/internal/api"
-	"github.com/inferalabs/mantismo/internal/config"
-	"github.com/inferalabs/mantismo/internal/fingerprint"
-	"github.com/inferalabs/mantismo/internal/interceptor"
-	"github.com/inferalabs/mantismo/internal/logger"
-	"github.com/inferalabs/mantismo/internal/policy"
-	"github.com/inferalabs/mantismo/internal/proxy"
-	"github.com/inferalabs/mantismo/internal/scanner"
-	"github.com/inferalabs/mantismo/internal/vault"
-	"github.com/inferalabs/mantismo/internal/vaulttools"
+	"github.com/abidkhan1974/mantismo/internal/api"
+	"github.com/abidkhan1974/mantismo/internal/config"
+	"github.com/abidkhan1974/mantismo/internal/fingerprint"
+	"github.com/abidkhan1974/mantismo/internal/interceptor"
+	"github.com/abidkhan1974/mantismo/internal/logger"
+	"github.com/abidkhan1974/mantismo/internal/policy"
+	"github.com/abidkhan1974/mantismo/internal/proxy"
+	"github.com/abidkhan1974/mantismo/internal/scanner"
+	"github.com/abidkhan1974/mantismo/internal/vault"
+	"github.com/abidkhan1974/mantismo/internal/vaulttools"
 )
 
 // Build-time variables injected via -ldflags.

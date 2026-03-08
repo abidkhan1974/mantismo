@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="inferalabs/mantismo"
+REPO="abidkhan1974/mantismo"
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 

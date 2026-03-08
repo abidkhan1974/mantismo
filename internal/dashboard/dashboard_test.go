@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/inferalabs/mantismo/internal/api"
-	"github.com/inferalabs/mantismo/internal/dashboard"
-	"github.com/inferalabs/mantismo/internal/logger"
+	"github.com/abidkhan1974/mantismo/internal/api"
+	"github.com/abidkhan1974/mantismo/internal/dashboard"
+	"github.com/abidkhan1974/mantismo/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -5,7 +5,7 @@ package interceptor
 import (
 	"encoding/json"
 
-	"github.com/inferalabs/mantismo/internal/proxy"
+	"github.com/abidkhan1974/mantismo/internal/proxy"
 )
 
 // MCPMessage represents a parsed JSON-RPC 2.0 message with MCP-specific fields.

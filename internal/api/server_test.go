@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/inferalabs/mantismo/internal/api"
-	apiclient "github.com/inferalabs/mantismo/internal/api/client"
-	"github.com/inferalabs/mantismo/internal/fingerprint"
-	"github.com/inferalabs/mantismo/internal/interceptor"
-	"github.com/inferalabs/mantismo/internal/logger"
+	"github.com/abidkhan1974/mantismo/internal/api"
+	apiclient "github.com/abidkhan1974/mantismo/internal/api/client"
+	"github.com/abidkhan1974/mantismo/internal/fingerprint"
+	"github.com/abidkhan1974/mantismo/internal/interceptor"
+	"github.com/abidkhan1974/mantismo/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

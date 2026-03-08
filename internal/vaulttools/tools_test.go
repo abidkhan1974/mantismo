@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/inferalabs/mantismo/internal/interceptor"
-	"github.com/inferalabs/mantismo/internal/vault"
-	"github.com/inferalabs/mantismo/internal/vaulttools"
+	"github.com/abidkhan1974/mantismo/internal/interceptor"
+	"github.com/abidkhan1974/mantismo/internal/vault"
+	"github.com/abidkhan1974/mantismo/internal/vaulttools"
 )
 
 // createTestVault opens a new vault in a temp dir and populates it with test data.

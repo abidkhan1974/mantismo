@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/inferalabs/mantismo/internal/dashboard"
-	"github.com/inferalabs/mantismo/internal/fingerprint"
-	"github.com/inferalabs/mantismo/internal/logger"
+	"github.com/abidkhan1974/mantismo/internal/dashboard"
+	"github.com/abidkhan1974/mantismo/internal/fingerprint"
+	"github.com/abidkhan1974/mantismo/internal/logger"
 )
 
 // ApprovalRequest represents a pending approval for the gateway.

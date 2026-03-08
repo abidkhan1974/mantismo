@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/inferalabs/mantismo/internal/approval"
-	"github.com/inferalabs/mantismo/internal/interceptor"
-	"github.com/inferalabs/mantismo/internal/vault"
+	"github.com/abidkhan1974/mantismo/internal/approval"
+	"github.com/abidkhan1974/mantismo/internal/interceptor"
+	"github.com/abidkhan1974/mantismo/internal/vault"
 )
 
 // TrustLevel controls how much vault data can be exposed to a caller.

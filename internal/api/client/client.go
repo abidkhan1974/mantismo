@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/inferalabs/mantismo/internal/api"
-	"github.com/inferalabs/mantismo/internal/logger"
+	"github.com/abidkhan1974/mantismo/internal/api"
+	"github.com/abidkhan1974/mantismo/internal/logger"
 )
 
 // Client is a thin HTTP client for the internal API server.
