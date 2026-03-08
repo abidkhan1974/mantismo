@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/inferalabs/mantismo/internal/dashboard"
 	"github.com/inferalabs/mantismo/internal/fingerprint"
 	"github.com/inferalabs/mantismo/internal/logger"
 )
@@ -173,6 +174,8 @@ func (s *Server) unsubscribe(ch chan logger.LogEntry) {
 // When cfg.Port == 0 the OS assigns a free port; use Addr() to discover it.
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
+	// Dashboard SPA — must be registered before specific routes so /api/* takes precedence.
+	mux.Handle("/", dashboard.Handler())
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/logs", s.handleLogs)
 	mux.HandleFunc("/api/tools", s.handleTools)
