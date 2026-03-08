@@ -33,6 +33,17 @@ jobs:
       - name: Run tests
         run: make test
 
+  vuln:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Run govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
