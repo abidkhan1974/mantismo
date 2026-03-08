@@ -44,6 +44,7 @@ brews:
   - repository:
       owner: inferalabs
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/inferalabs/mantismo"
     description: "Eyes on every agent — a personal firewall for AI agents"
     license: "Apache-2.0"
