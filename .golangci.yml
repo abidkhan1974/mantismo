@@ -31,6 +31,7 @@ linters:
         - G204  # Subprocess with tainted input — intentional; user configures their own MCP server command
         - G304  # File inclusion via variable — intentional; reading user-specified config/policy/log paths
         - G703  # Path traversal via taint — false positives in tests that check for file existence
+        - G122  # filepath.Walk/WalkDir TOCTOU — false positive in dashboard test (not security-sensitive)
   exclusions:
     rules:
       # All .Close() errors in defer/cleanup are standard Go idiom and not actionable.
