@@ -21,7 +21,7 @@ Mantismo is a personal MCP security proxy. It sits between AI agent hosts (Claud
 **Prerequisites:** Go 1.22+, make
 
 ```bash
-git clone https://github.com/inferalabs/mantismo
+git clone https://github.com/abidkhan1974/mantismo
 cd mantismo
 make build
 
