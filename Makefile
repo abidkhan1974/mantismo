@@ -1,4 +1,4 @@
-.PHONY: build test lint clean install dashboard-ui
+.PHONY: build test test-e2e lint clean install dashboard-ui
 
 BINARY  := mantismo
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0-dev")
@@ -10,7 +10,10 @@ build:
 	CGO_ENABLED=0 go build $(LDFLAGS) -o bin/$(BINARY) ./cmd/mantismo/
 
 test:
-	CGO_ENABLED=0 go test -v -count=1 ./...
+	CGO_ENABLED=0 go test -v -count=1 -timeout 120s $(shell go list ./... | grep -v /e2e)
+
+test-e2e:
+	CGO_ENABLED=0 go test -v -count=1 -timeout 120s ./e2e/...
 
 lint:
 	golangci-lint run ./...

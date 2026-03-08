@@ -17,9 +17,13 @@ import (
 	"github.com/inferalabs/mantismo/internal/api"
 	"github.com/inferalabs/mantismo/internal/config"
 	"github.com/inferalabs/mantismo/internal/fingerprint"
+	"github.com/inferalabs/mantismo/internal/interceptor"
 	"github.com/inferalabs/mantismo/internal/logger"
 	"github.com/inferalabs/mantismo/internal/policy"
+	"github.com/inferalabs/mantismo/internal/proxy"
+	"github.com/inferalabs/mantismo/internal/scanner"
 	"github.com/inferalabs/mantismo/internal/vault"
+	"github.com/inferalabs/mantismo/internal/vaulttools"
 )
 
 // Build-time variables injected via -ldflags.
@@ -65,6 +69,7 @@ func newWrapCmd() *cobra.Command {
 	var noVault bool
 	var port int
 	var configPath string
+	var policyDir string
 
 	cmd := &cobra.Command{
 		Use:   "wrap -- <command> [args...]",
@@ -158,7 +163,228 @@ func newWrapCmd() *cobra.Command {
 			_ = noPolicy
 			_ = noVault
 
-			// Wait for SIGINT/SIGTERM.
+			// ── Load policy engine ────────────────────────────────────────────────
+			var policyEng *policy.Engine
+			if !noPolicy {
+				candidateDirs := []string{
+					policyDir,
+					filepath.Join(dataDir, "policies"),
+				}
+				if exe, exeErr := os.Executable(); exeErr == nil {
+					candidateDirs = append(candidateDirs,
+						filepath.Join(filepath.Dir(exe), "..", "share", "mantismo", "policies"))
+				}
+				for _, d := range candidateDirs {
+					if d == "" {
+						continue
+					}
+					eng, engErr := policy.NewEngine(d)
+					if engErr == nil {
+						policyEng = eng
+						fmt.Fprintf(os.Stderr, "[mantismo] policy: loaded from %s\n", d)
+						break
+					}
+				}
+				if policyEng == nil {
+					// Fall back to embedded balanced preset
+					balanced := `package mantismo
+import future.keywords.if
+import future.keywords.in
+default decision := {"decision": "allow", "reason": "balanced mode: allowed by default", "rule": "default_allow"}
+decision := {"decision": "allow", "reason": "read-only tool", "rule": "allow_reads"} if {
+    read_tool_prefixes := ["get_", "list_", "search_", "read_", "fetch_", "show_", "describe_", "vault_get_", "vault_search_"]
+    some prefix in read_tool_prefixes
+    startswith(input.tool_name, prefix)
+    not input.tool_changed
+}
+decision := {"decision": "approve", "reason": "write operation requires approval", "rule": "approve_writes"} if {
+    write_tool_prefixes := ["create_", "update_", "delete_", "remove_", "push_", "send_", "execute_", "run_", "write_", "modify_"]
+    some prefix in write_tool_prefixes
+    startswith(input.tool_name, prefix)
+    not input.tool_changed
+}
+decision := {"decision": "deny", "reason": "sampling requests blocked", "rule": "block_sampling"} if {
+    input.method == "sampling/createMessage"
+}
+`
+					tmpPolicyDir, tmpErr := os.MkdirTemp("", "mantismo-policy-*")
+					if tmpErr == nil {
+						regoPath := filepath.Join(tmpPolicyDir, "balanced.rego")
+						if writeErr := os.WriteFile(regoPath, []byte(balanced), 0600); writeErr == nil {
+							if eng, engErr := policy.NewEngine(tmpPolicyDir); engErr == nil {
+								policyEng = eng
+								fmt.Fprintf(os.Stderr, "[mantismo] policy: using built-in balanced preset\n")
+							}
+						}
+						defer os.RemoveAll(tmpPolicyDir)
+					}
+				}
+			}
+
+			// ── Secret scanner ────────────────────────────────────────────────────
+			scan := scanner.NewScanner(nil)
+
+			// ── Request tracker (for duration logging) ────────────────────────────
+			tracker := logger.NewRequestTracker()
+
+			// ── Vault tools handler (nil vault = vault not initialized) ───────────
+			var vaultHandler *vaulttools.Handler
+			if !noVault {
+				vaultHandler = vaulttools.NewHandler(nil, nil, vaulttools.Standard)
+			}
+
+			// ── Build interceptor hooks ───────────────────────────────────────────
+			ic := interceptor.New(interceptor.Hooks{
+				OnToolsList: func(tools []interceptor.ToolInfo) ([]interceptor.ToolInfo, error) {
+					newTools, changed, _ := fpStore.Check(tools, args[0])
+					if len(newTools) > 0 {
+						fmt.Fprintf(os.Stderr, "[mantismo] %d new tool(s) seen\n", len(newTools))
+					}
+					if len(changed) > 0 {
+						fmt.Fprintf(os.Stderr,
+							"[mantismo] WARNING: %d tool description(s) changed — possible rug-pull: %v\n",
+							len(changed), changed)
+					}
+					_ = fpStore.Update(tools, args[0])
+
+					// Inject vault tools into the list if vault handler is available.
+					if vaultHandler != nil {
+						tools = append(tools, vaultHandler.ToolDefinitions()...)
+					}
+					return tools, nil
+				},
+
+				OnToolCall: func(req interceptor.ToolCallRequest) interceptor.InterceptResult {
+					toolChanged := fpStore.IsToolChanged(req.ToolName)
+
+					// Scan arguments for secrets.
+					if scanRes := scan.ScanJSON(req.Arguments); scanRes.Found {
+						fmt.Fprintf(os.Stderr,
+							"[mantismo] BLOCKED: credential detected in tool call arguments (%s)\n",
+							req.ToolName)
+						return interceptor.InterceptResult{
+							Action: interceptor.Block,
+							Error: &interceptor.JSONRPCError{
+								Code:    -32000,
+								Message: "blocked: credential detected in arguments",
+							},
+						}
+					}
+
+					// Evaluate policy.
+					if policyEng != nil {
+						result, evalErr := policyEng.Evaluate(policy.EvalInput{
+							Method:           "tools/call",
+							ToolName:         req.ToolName,
+							ToolChanged:      toolChanged,
+							ToolAcknowledged: false,
+						})
+						if evalErr == nil {
+							switch result.Decision {
+							case policy.Deny:
+								fmt.Fprintf(os.Stderr,
+									"[mantismo] BLOCKED: %s — %s\n",
+									req.ToolName, result.Reason)
+								return interceptor.InterceptResult{
+									Action: interceptor.Block,
+									Error: &interceptor.JSONRPCError{
+										Code:    -32000,
+										Message: "blocked by policy: " + result.Reason,
+									},
+								}
+							case policy.Allow:
+								// fall through to forward
+							case policy.Approve:
+								// Approval gateway not yet wired; auto-deny.
+								fmt.Fprintf(os.Stderr,
+									"[mantismo] APPROVAL REQUIRED: %s — %s (auto-denied, no approval backend)\n",
+									req.ToolName, result.Reason)
+								return interceptor.InterceptResult{
+									Action: interceptor.Block,
+									Error: &interceptor.JSONRPCError{
+										Code:    -32000,
+										Message: "approval required: " + result.Reason,
+									},
+								}
+							}
+						}
+					}
+
+					return interceptor.InterceptResult{Action: interceptor.Forward}
+				},
+
+				OnToolCallResponse: func(resp interceptor.ToolCallResponse, req interceptor.ToolCallRequest) interceptor.InterceptResult {
+					// Scan response content for secrets.
+					if scanRes := scan.ScanJSON(resp.Content); scanRes.Found {
+						fmt.Fprintf(os.Stderr,
+							"[mantismo] WARNING: credential detected in tool response (%s) — redacting\n",
+							req.ToolName)
+						_ = log.Log(logger.LogEntry{
+							Timestamp:   time.Now().UTC(),
+							SessionID:   sessionID,
+							Direction:   "from_server",
+							MessageType: "response",
+							Method:      "tools/call",
+							ToolName:    req.ToolName,
+							Redacted:    true,
+							Summary:     "← tools/call " + req.ToolName + " [REDACTED: credential detected]",
+						})
+					}
+					return interceptor.InterceptResult{Action: interceptor.Forward}
+				},
+
+				OnAnyMessage: func(msg interceptor.MCPMessage, dir proxy.Direction) {
+					dirStr := "to_server"
+					if dir == proxy.FromServer {
+						dirStr = "from_server"
+					}
+					msgType := "notification"
+					if msg.IsRequest {
+						msgType = "request"
+					} else if msg.IsResponse {
+						msgType = "response"
+					}
+
+					var durationMs *float64
+					if msg.IsRequest && msg.ID != nil {
+						tracker.TrackRequest(*msg.ID)
+					} else if msg.IsResponse && msg.ID != nil {
+						durationMs = tracker.CompleteRequest(*msg.ID)
+					}
+
+					entry := logger.LogEntry{
+						Timestamp:   time.Now().UTC(),
+						SessionID:   sessionID,
+						Direction:   dirStr,
+						MessageType: msgType,
+						Method:      msg.Method,
+						RequestID:   msg.ID,
+						RawSize:     len(msg.Raw),
+						DurationMs:  durationMs,
+						Summary: logger.BuildSummary(
+							dirStr, msgType, msg.Method, "",
+							durationMs, len(msg.Raw), msg.IsError, nil, "",
+						),
+					}
+					_ = log.Log(entry)
+					apiSrv.PublishLog(entry)
+				},
+			})
+
+			// ── Start proxy ───────────────────────────────────────────────────────
+			proxyCfg := proxy.Config{
+				Command: args[0],
+				Args:    args[1:],
+			}
+			p := proxy.New(proxyCfg, ic.Handle)
+			go func() {
+				if runErr := p.Run(ctx); runErr != nil && ctx.Err() == nil {
+					fmt.Fprintf(os.Stderr, "[mantismo] proxy exited: %v\n", runErr)
+				}
+				cancel() // shut everything down when proxy exits
+			}()
+
+			// Wait for SIGINT/SIGTERM or proxy exit.
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
@@ -181,6 +407,7 @@ func newWrapCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noVault, "no-vault", false, "Disable vault tools injection")
 	cmd.Flags().IntVar(&port, "port", 7777, "API server port")
 	cmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
+	cmd.Flags().StringVar(&policyDir, "policy-dir", "", "Directory containing .rego policy files (overrides preset)")
 
 	return cmd
 }
