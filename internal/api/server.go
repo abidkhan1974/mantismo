@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/abidkhan1974/mantismo/internal/dashboard"
 	"github.com/abidkhan1974/mantismo/internal/fingerprint"
 	"github.com/abidkhan1974/mantismo/internal/logger"
+	"github.com/gorilla/websocket"
 )
 
 // ApprovalRequest represents a pending approval for the gateway.

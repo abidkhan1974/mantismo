@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/abidkhan1974/mantismo/internal/api"
 	"github.com/abidkhan1974/mantismo/internal/dashboard"
 	"github.com/abidkhan1974/mantismo/internal/logger"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
