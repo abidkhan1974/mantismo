@@ -1,7 +1,6 @@
 # Mantismo — Project Documentation Index
 
 **Product:** Mantismo — A Personal Firewall for AI Agents
-**Author:** Abid Khan, Infera AI Labs
 **Date:** March 2026
 **Status:** Pre-MVP
 
@@ -31,8 +30,6 @@ Each document is numbered and self-contained. Feed them to Claude Code in order.
 | 14 | `14-SPEC-DASHBOARD.md` | Tauri-ready React SPA dashboard | Browser-based UI (embeddable in Tauri) | Weeks 15-16 |
 | 15 | `15-TESTING-STRATEGY.md` | Test plan, fixtures, integration test harness | Comprehensive test suite | Ongoing |
 | 16 | `16-RELEASE-PACKAGING.md` | Build, cross-compile, Homebrew, install script | Distributable binary | Week 17 |
-| 17 | `17-THREAT-MODEL.md` | Formal threat model and security analysis | Security review document | Reference |
-| 18 | `18-FUTURE-PHASES.md` | Phase 2: Tauri desktop app, Phase 3: Mobile companion | Roadmap (no code) | — |
 
 ### Dependency Graph
 
@@ -74,8 +71,6 @@ Each document is numbered and self-contained. Feed them to Claude Code in order.
 
 - `15-TESTING-STRATEGY.md` — Referenced by every spec; defines how each component is tested
 - `16-RELEASE-PACKAGING.md` — Final integration; depends on all specs being complete
-- `17-THREAT-MODEL.md` — Reference document; informs design decisions across all specs
-- `18-FUTURE-PHASES.md` — No dependencies; planning document only
 
 ### Conventions Used Across All Specs
 

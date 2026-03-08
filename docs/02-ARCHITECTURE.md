@@ -50,33 +50,6 @@ This means:
 - Switching from CLI to GUI requires zero backend changes
 - Multiple clients can run simultaneously (CLI and dashboard at the same time)
 
-## Phased Delivery
-
-```
-Phase 1 (Months 1-4): CLI + Web Dashboard
-┌────────────────────────────┐
-│  CLI (cobra)               │──► Internal API (localhost:7777)
-│  Web Dashboard (React SPA) │──► Internal API (localhost:7777)
-└────────────────────────────┘
-
-Phase 2 (Months 5-7): Tauri Desktop App
-┌────────────────────────────┐
-│  Tauri App                 │──► Internal API (localhost:7777)
-│  ├── System tray           │    (same API, same backend)
-│  ├── Native notifications  │
-│  ├── Setup wizard          │
-│  └── Embedded Web UI       │    (same React SPA from Phase 1)
-└────────────────────────────┘
-
-Phase 3 (Months 8-10): Mobile Companion
-┌────────────────────────────┐
-│  React Native App          │──► Push notification service
-│  ├── Approval notifications│    (via relay server or local network)
-│  ├── Activity monitor      │
-│  └── Vault quick-view      │
-└────────────────────────────┘
-```
-
 ## Data Flow: Normal Tool Call
 
 ```
@@ -274,9 +247,6 @@ mantismo/
 
 ### Why API-first (not CLI-first)?
 The CLI is the first *client*, but the API is the first *interface*. By routing everything through a local REST + WebSocket API, we guarantee that the Tauri desktop app (Phase 2) and mobile app (Phase 3) can consume the same backend with zero refactoring. The API server starts automatically when `mantismo wrap` runs. This adds ~1 week of work to Phase 1 but saves months in Phase 2.
-
-### Why design for Tauri from day one?
-Tauri apps embed a webview that renders HTML/JS — which is exactly what our React dashboard already is. By ensuring the dashboard is a standalone SPA that communicates via relative API paths, wrapping it in Tauri later is a configuration task, not a rewrite. The Go backend runs as a Tauri sidecar process, and the React SPA is bundled as the Tauri frontend.
 
 ### Why Go?
 Single static binary, excellent subprocess handling, OPA Go library, trivial cross-compilation, built-in HTTP server for the API layer, and Tauri can invoke Go binaries as sidecar processes.

@@ -29,16 +29,6 @@ Mantismo is a personal MCP security proxy. It sits between AI agent hosts (Claud
 - **Single static binary:** Distribute as one Go binary. No runtime dependencies (no Node, no Python, no Docker for the user).
 - **Progressive disclosure:** Start with logging only. User opts into policies, then vault, then dashboard — each layer additive.
 
-## Explicit Non-Goals (MVP)
-
-- HTTP+SSE transport (stdio only for MVP)
-- Multi-user or multi-tenant support
-- Cloud/SaaS hosting
-- Mobile apps
-- Agent marketplace
-- Enterprise SSO/SAML integration
-- Windows support (Linux + macOS only for MVP; Windows in Phase 2)
-
 ## Technical Constraints
 
 - **Language:** Go 1.26+ (static binary, zero dependencies, fast cross-compilation)
@@ -57,11 +47,3 @@ Mantismo is a personal MCP security proxy. It sits between AI agent hosts (Claud
 5. Scan tool call arguments for leaked secrets (API keys, tokens, passwords)
 6. Store personal data in a local encrypted vault accessible to agents via scoped MCP tools
 7. Provide a local web dashboard showing real-time agent activity
-
-## Competitive Context
-
-Mantismo is NOT competing with enterprise MCP gateways (Gravitee, Traefik Hub, Kong, MintMCP, IBM ContextForge). Those are infrastructure tools for platform teams.
-
-Mantismo is the personal equivalent: `brew install mantismo`, one config line change, and your agents are governed. No Kubernetes. No Helm charts. No cloud account.
-
-Think: Tailscale (personal VPN) vs. Cisco (enterprise VPN). Mantismo is Tailscale for MCP security.

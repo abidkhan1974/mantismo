@@ -164,8 +164,8 @@ $ mantismo vault import
 ━━━━━━━━━━━━━━━━━━━━━━
 
 Category: Profile
-  Full name: Abid Khan
-  Email (standard): abid@inferalabs.com
+  Full name: Alex Chen
+  Email (standard): user@example.com
   Phone (standard): [skip]
 
 Category: Preferences
@@ -199,7 +199,7 @@ When vault data is queried by MCP tools (spec 13), the sensitivity level determi
 Masking rules for sensitive data:
 - ID numbers: show last 4 only → `***-**-1234`
 - Phone: show last 4 → `***-***-5678`
-- Email: mask middle → `a***@inferalabs.com`
+- Email: mask middle → `u***@example.com`
 
 ## Test Plan
 

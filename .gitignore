@@ -1,5 +1,6 @@
 bin/
 dist/
+.internal/
 *.DS_Store
 .DS_Store
 
