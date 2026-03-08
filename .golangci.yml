@@ -1,21 +1,25 @@
+version: "2"
+
 run:
   timeout: 5m
 
 linters:
+  default: none
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
-    - staticcheck
+    - staticcheck  # includes gosimple and stylecheck (merged in v2)
     - unused
-    - gofmt
-    - goimports
     - misspell
     - gosec
+  settings:
+    gosec:
+      excludes:
+        - G104  # Unhandled errors (we'll handle explicitly)
+        - G204  # Subprocess launched with tainted input — intentional by design (user-configured MCP command)
 
-linters-settings:
-  gosec:
-    excludes:
-      - G104  # Unhandled errors (we'll handle explicitly)
-      - G204  # Subprocess launched with tainted input — intentional by design (user-configured MCP command)
+formatters:
+  enable:
+    - gofmt
+    - goimports
