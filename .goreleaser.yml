@@ -11,7 +11,7 @@ builds:
     main: ./cmd/mantismo/
     binary: mantismo
     env:
-      - CGO_ENABLED=1  # Required for SQLCipher vault storage
+      - CGO_ENABLED=0  # Pure-Go vault (modernc.org/sqlite + AES-256-GCM)
     goos:
       - darwin
       - linux

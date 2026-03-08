@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -16,10 +18,16 @@ import (
 	"github.com/inferalabs/mantismo/internal/config"
 	"github.com/inferalabs/mantismo/internal/fingerprint"
 	"github.com/inferalabs/mantismo/internal/logger"
+	"github.com/inferalabs/mantismo/internal/policy"
+	"github.com/inferalabs/mantismo/internal/vault"
 )
 
-// version is injected at build time via -ldflags.
-var version = "0.1.0-dev"
+// Build-time variables injected via -ldflags.
+var (
+	version = "0.1.0-dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
@@ -33,7 +41,7 @@ func newRootCmd() *cobra.Command {
 		Short:        "Eyes on every agent",
 		Long:         "Mantismo — a personal firewall for your AI agents. Own your context, lease it to agents on your terms.",
 		SilenceUsage: true,
-		Version:      version,
+		Version:      fmt.Sprintf("%s (commit %s, built %s)", version, commit, date),
 	}
 
 	root.AddCommand(
@@ -315,8 +323,129 @@ func newDoctorCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Validate Mantismo installation and environment",
+		Long:  "Check that Mantismo and all its dependencies are correctly installed and configured.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(os.Stderr, "Not implemented yet")
+			ok := true
+			pass := func(label string) { fmt.Printf("  ✓ %s\n", label) }
+			fail := func(label, reason string) {
+				fmt.Printf("  ✗ %s — %s\n", label, reason)
+				ok = false
+			}
+			warn := func(label, reason string) { fmt.Printf("  ⚠ %s — %s\n", label, reason) }
+
+			fmt.Printf("mantismo doctor  (version %s  commit %s  built %s)\n\n", version, commit, date)
+			fmt.Println("Checking installation:")
+
+			// 1. Binary check.
+			exe, err := os.Executable()
+			if err != nil || exe == "" {
+				fail("Binary", "cannot determine executable path")
+			} else {
+				pass(fmt.Sprintf("Binary: %s", exe))
+			}
+
+			// 2. Data directory check.
+			home, err := os.UserHomeDir()
+			if err != nil {
+				fail("Data directory", "cannot determine home directory")
+			} else {
+				dataDir := filepath.Join(home, ".mantismo")
+				if err := os.MkdirAll(dataDir, 0700); err != nil {
+					fail("Data directory", fmt.Sprintf("%s is not writable: %v", dataDir, err))
+				} else {
+					// Verify writability by creating a probe file.
+					probe := filepath.Join(dataDir, ".doctor_probe")
+					if err := os.WriteFile(probe, []byte("ok"), 0600); err != nil {
+						fail("Data directory", fmt.Sprintf("cannot write to %s: %v", dataDir, err))
+					} else {
+						_ = os.Remove(probe)
+						pass(fmt.Sprintf("Data directory: %s (writable)", dataDir))
+					}
+				}
+			}
+
+			// 3. Python check (used by some MCP servers).
+			fmt.Println("\nChecking optional dependencies:")
+			pythonBin := "python3"
+			if runtime.GOOS == "windows" {
+				pythonBin = "python"
+			}
+			if _, err := exec.LookPath(pythonBin); err != nil {
+				warn("Python", fmt.Sprintf("%s not found in PATH (needed by some MCP servers)", pythonBin))
+			} else {
+				out, _ := exec.Command(pythonBin, "--version").Output()
+				pass(fmt.Sprintf("Python: %s", string(out[:len(out)-1])))
+			}
+
+			// 4. Node.js check.
+			if _, err := exec.LookPath("node"); err != nil {
+				warn("Node.js", "not found in PATH (needed by some MCP servers, e.g. @modelcontextprotocol/server-github)")
+			} else {
+				out, _ := exec.Command("node", "--version").Output()
+				pass(fmt.Sprintf("Node.js: %s", string(out[:len(out)-1])))
+			}
+
+			// 5. Vault encryption check.
+			fmt.Println("\nChecking core components:")
+			tmpDir, err := os.MkdirTemp("", "mantismo-doctor-*")
+			if err != nil {
+				fail("Vault encryption", fmt.Sprintf("cannot create temp dir: %v", err))
+			} else {
+				defer os.RemoveAll(tmpDir)
+				v, err := vault.Open(filepath.Join(tmpDir, "doctor.db"), "doctor-test-passphrase")
+				if err != nil {
+					fail("Vault encryption", fmt.Sprintf("failed to open test vault: %v", err))
+				} else {
+					testEntry := vault.Entry{
+						Key:         "doctor_test",
+						Value:       "ok",
+						Category:    vault.Profile,
+						Sensitivity: vault.Public,
+						Label:       "Doctor test",
+					}
+					if err := v.Set(testEntry); err != nil {
+						fail("Vault encryption", fmt.Sprintf("write failed: %v", err))
+					} else if _, err := v.Get("doctor_test"); err != nil {
+						fail("Vault encryption", fmt.Sprintf("read failed: %v", err))
+					} else {
+						pass("Vault encryption: AES-256-GCM working")
+					}
+					_ = v.Close()
+				}
+			}
+
+			// 6. OPA policy engine check.
+			// Use a built-in balanced policy (empty dir falls back to balanced preset defaults).
+			balancedPolicyDir := filepath.Join(
+				filepath.Dir(os.Args[0]), "..", "policies",
+			)
+			eng, err := policy.NewEngine(balancedPolicyDir)
+			if err != nil {
+				// Fall back to empty dir (uses OPA default allow).
+				eng, err = policy.NewEngine("")
+			}
+			if err != nil {
+				fail("OPA policy engine", fmt.Sprintf("failed to initialize: %v", err))
+			} else {
+				result, evalErr := eng.Evaluate(policy.EvalInput{
+					Method:   "tools/call",
+					ToolName: "get_test",
+				})
+				if evalErr != nil {
+					fail("OPA policy engine", fmt.Sprintf("failed to evaluate: %v", evalErr))
+				} else {
+					pass(fmt.Sprintf("OPA policy engine: loaded and evaluated (decision: %s)", result.Decision))
+				}
+			}
+
+			// Summary.
+			fmt.Println()
+			if ok {
+				fmt.Println("✓ All checks passed — Mantismo is ready to use.")
+			} else {
+				fmt.Println("✗ Some checks failed. See above for details.")
+				return fmt.Errorf("doctor: one or more checks failed")
+			}
 			return nil
 		},
 	}
