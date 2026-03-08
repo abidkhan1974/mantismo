@@ -26,7 +26,7 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
+    formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
@@ -40,15 +40,15 @@ changelog:
       - "^test:"
       - "^ci:"
 
-brews:
-  - repository:
+homebrew_casks:
+  - name: mantismo
+    directory: Casks
+    binaries:
+      - mantismo
+    repository:
       owner: abidkhan1974
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/abidkhan1974/mantismo"
     description: "Eyes on every agent — a personal firewall for AI agents"
     license: "Apache-2.0"
-    install: |
-      bin.install "mantismo"
-    test: |
-      system "#{bin}/mantismo", "--version"
