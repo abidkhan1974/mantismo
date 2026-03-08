@@ -291,19 +291,20 @@ func (v *Vault) Set(entry Entry) error {
 	// Check whether the key already exists.
 	var existingCreatedAt string
 	queryErr := v.db.QueryRow("SELECT created_at FROM vault_entries WHERE key=?", entry.Key).Scan(&existingCreatedAt)
-	if queryErr == nil {
+	switch queryErr {
+	case nil:
 		// Key exists — update it, preserving created_at.
 		_, err = v.db.Exec(
 			"UPDATE vault_entries SET value=?, category=?, sensitivity=?, label=?, updated_at=? WHERE key=?",
 			encrypted, string(entry.Category), string(entry.Sensitivity), entry.Label, now, entry.Key,
 		)
-	} else if queryErr == sql.ErrNoRows {
+	case sql.ErrNoRows:
 		// New key — insert it.
 		_, err = v.db.Exec(
 			"INSERT INTO vault_entries (key, value, category, sensitivity, label, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 			entry.Key, encrypted, string(entry.Category), string(entry.Sensitivity), entry.Label, now, now,
 		)
-	} else {
+	default:
 		return fmt.Errorf("vault: check key existence: %w", queryErr)
 	}
 	return err

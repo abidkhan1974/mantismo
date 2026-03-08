@@ -16,18 +16,27 @@ linters:
   settings:
     errcheck:
       exclude-functions:
-        # Close() errors in defer are standard Go idiom; not actionable once deferred
-        - (io.Closer).Close
-        # Temp dir cleanup failures don't affect correctness
+        # Cleanup functions where errors are not actionable in defer context
         - os.RemoveAll
-        # Terminal/stderr writes: errors not actionable (if terminal fails, can't report it)
+        # Terminal/stderr writes: errors not actionable if terminal is broken
         - fmt.Fprint
         - fmt.Fprintf
         - fmt.Fprintln
     gosec:
       excludes:
-        - G104  # Unhandled errors (we'll handle explicitly)
-        - G204  # Subprocess launched with tainted input — intentional by design (user-configured MCP command)
+        - G101  # "Hardcoded credentials" — false positives in scanner_test.go (test inputs for detection)
+        - G104  # Unhandled errors — handled explicitly via errcheck
+        - G118  # Goroutine/context lifecycle — intentional patterns (shutdown goroutine uses Background after ctx cancels)
+        - G202  # SQL string concatenation — WHERE clause built from internal column-name constants, not user input
+        - G204  # Subprocess with tainted input — intentional; user configures their own MCP server command
+        - G304  # File inclusion via variable — intentional; reading user-specified config/policy/log paths
+        - G703  # Path traversal via taint — false positives in tests that check for file existence
+  exclusions:
+    rules:
+      # All .Close() errors in defer/cleanup are standard Go idiom and not actionable.
+      # golangci-lint v2 checks deferred calls by default (v1 did not).
+      - linters: [errcheck]
+        text: "Error return value of.*\\.Close.*is not checked"
 
 formatters:
   enable:
