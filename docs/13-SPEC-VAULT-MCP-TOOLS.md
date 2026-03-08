@@ -45,7 +45,7 @@ Returns the user's profile information, filtered by agent trust level.
   "content": [
     {
       "type": "text",
-      "text": "{\"full_name\": \"Alex Chen\", \"email\": \"user@example.com\", \"preferred_language\": \"English\"}"
+      "text": "{\"full_name\": \"Abid Khan\", \"email\": \"user@example.com\", \"preferred_language\": \"English\"}"
     }
   ]
 }

@@ -164,7 +164,7 @@ $ mantismo vault import
 ━━━━━━━━━━━━━━━━━━━━━━
 
 Category: Profile
-  Full name: Alex Chen
+  Full name: Abid Khan
   Email (standard): user@example.com
   Phone (standard): [skip]
 
