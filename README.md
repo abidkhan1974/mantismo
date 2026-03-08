@@ -62,18 +62,17 @@ mantismo doctor
 
 ## Architecture
 
-Mantismo uses an **API-first architecture**: a Go backend exposes a REST + WebSocket API at `localhost:7777`. The CLI and web dashboard are thin clients of this API, enabling a future Tauri desktop app with zero backend changes.
+Mantismo uses an **API-first architecture**: a Go backend exposes a REST + WebSocket API at `localhost:7777`. The CLI and web dashboard are both thin clients of this API.
 
 ```
 Agent Host ──stdio──► Mantismo Proxy ──stdio──► MCP Server
                             │
                      Internal API (localhost:7777)
-                      ├── CLI (cobra)
-                      ├── Web Dashboard (React)
-                      └── Future: Tauri Desktop App
+                      ├── CLI
+                      └── Web Dashboard
 ```
 
-For the full architecture, see [docs/02-ARCHITECTURE.md](docs/02-ARCHITECTURE.md).
+For more detail, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Configuration
 
@@ -92,12 +91,6 @@ preset = "balanced"  # paranoid | balanced | permissive
 [vault]
 enabled = false
 ```
-
-## Documentation
-
-- [Product Brief](docs/01-PRODUCT-BRIEF.md)
-- [Architecture](docs/02-ARCHITECTURE.md)
-- [Testing Strategy](docs/15-TESTING-STRATEGY.md)
 
 ## License
 
