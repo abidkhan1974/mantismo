@@ -41,7 +41,7 @@ Mantismo is a personal MCP security proxy. It sits between AI agent hosts (Claud
 
 ## Technical Constraints
 
-- **Language:** Go 1.22+ (static binary, zero dependencies, fast cross-compilation)
+- **Language:** Go 1.24+ (static binary, zero dependencies, fast cross-compilation)
 - **Encryption:** SQLCipher for vault storage (AES-256), Argon2id for key derivation
 - **Policy engine:** Embedded OPA (Open Policy Agent) via Go library
 - **Config format:** TOML (`~/.mantismo/config.toml`)

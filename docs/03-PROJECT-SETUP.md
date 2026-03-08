@@ -6,7 +6,7 @@ Initialize the Go project with module structure, dependencies, Makefile, CI conf
 
 ## Prerequisites
 
-- Go 1.22+
+- Go 1.24+
 - `golangci-lint`
 - `make`
 
@@ -113,7 +113,7 @@ Create `.github/workflows/ci.yml`:
 - Trigger: push to main, pull requests
 - Jobs:
   - `lint`: Run `golangci-lint`
-  - `test`: Run `make test` on Go 1.22 (ubuntu-latest and macos-latest)
+  - `test`: Run `make test` on Go 1.24 (ubuntu-latest and macos-latest)
   - `build`: Run `make build` on ubuntu-latest and macos-latest
 
 ### 3.8 Config Package
