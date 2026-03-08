@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package client provides a thin HTTP client for the Mantismo internal API server.
 package client
 

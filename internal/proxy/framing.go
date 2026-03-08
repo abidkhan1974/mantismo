@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package proxy — framing.go handles newline-delimited JSON-RPC message framing over stdio.
 //
 // MCP uses JSON-RPC 2.0 over stdio with newline-delimited messages.

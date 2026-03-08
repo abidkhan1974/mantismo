@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package vault provides an encrypted local data store for personal information.
 // Values are encrypted with AES-256-GCM; the key is derived from a passphrase
 // using PBKDF2-HMAC-SHA512 with 256,000 iterations.

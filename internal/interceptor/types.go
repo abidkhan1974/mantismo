@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package interceptor — types.go defines MCP message types, hook signatures,
 // and action constants for the MCP message interceptor.
 package interceptor

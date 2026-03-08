@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package dashboard embeds the React SPA and provides an HTTP handler that
 // serves the single-page application. All routes not matching /api/* fall back
 // to index.html for client-side routing.

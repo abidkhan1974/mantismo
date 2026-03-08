@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package scanner provides regex-based detection of secrets and credentials
 // in MCP tool call arguments (outbound) and tool responses (inbound).
 package scanner

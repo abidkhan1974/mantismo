@@ -3,7 +3,7 @@
 > **A personal firewall for your AI agents.** Own your context, lease it to agents on your terms.
 
 ![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue)
 ![Go](https://img.shields.io/badge/go-1.22+-00ADD8)
 
 ## What Is Mantismo?
@@ -76,4 +76,4 @@ enabled = false
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Dual licensed under AGPL-3.0 and a commercial license. See [LICENSE](LICENSE) for details.

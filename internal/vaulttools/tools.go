@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package vaulttools implements MCP tool handlers that expose read-only access
 // to the encrypted vault. These tools are injected into tools/list responses
 // and handled locally without forwarding to the upstream MCP server.

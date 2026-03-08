@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package api implements the internal REST + WebSocket API server.
 // This is the central nervous system: every feature Mantismo offers is exposed
 // through this server. The CLI, web dashboard, and future Tauri/mobile apps

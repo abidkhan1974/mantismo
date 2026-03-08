@@ -1,3 +1,7 @@
+// Copyright 2026 Mantismo. All rights reserved.
+// Use of this source code is governed by the AGPL-3.0 license
+// or a commercial license. See LICENSE for details.
+
 // Package logger writes structured JSONL audit logs to ~/.mantismo/logs/,
 // one file per UTC day, with automatic rotation and thread-safe writes.
 package logger
