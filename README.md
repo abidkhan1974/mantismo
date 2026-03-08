@@ -4,7 +4,7 @@
 
 ![Work in Progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
 ![License](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue)
-![Go](https://img.shields.io/badge/go-1.22+-00ADD8)
+![Go](https://img.shields.io/badge/go-1.26+-00ADD8)
 
 ## What Is Mantismo?
 
@@ -16,23 +16,48 @@ Mantismo is a personal MCP security proxy. It sits between AI agent hosts (Claud
 - **Protection** — Detect credential leaks and tool poisoning (rug pulls)
 - **Sovereignty** — Store personal data in a local encrypted vault
 
-## Quick Start (Build from Source)
+## Install
 
-**Prerequisites:** Go 1.22+, make
+### Homebrew (macOS + Linux)
+
+```bash
+brew tap abidkhan1974/homebrew-tap
+brew install mantismo
+```
+
+### Direct download (macOS + Linux)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/abidkhan1974/mantismo/main/install.sh | sh
+```
+
+Auto-detects your OS and architecture, installs to `/usr/local/bin/mantismo`.
+
+### Build from source
+
+**Prerequisites:** Go 1.26+, make
 
 ```bash
 git clone https://github.com/abidkhan1974/mantismo
 cd mantismo
 make build
+./bin/mantismo --version
+```
 
+## Quick Start
+
+```bash
 # Wrap any stdio MCP server
-./bin/mantismo wrap -- npx -y @modelcontextprotocol/server-github
+mantismo wrap -- npx -y @modelcontextprotocol/server-github
 
 # View audit logs
-./bin/mantismo logs --since today
+mantismo logs --since today
 
 # Open dashboard
-./bin/mantismo dashboard --open
+mantismo dashboard --open
+
+# Check installation
+mantismo doctor
 ```
 
 ## Architecture
