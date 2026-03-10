@@ -21,3 +21,27 @@ hosted service without open-sourcing your code — a commercial
 license is available.
 
 Contact: abidkhan1974@gmail.com
+
+See LICENSE-COMMERCIAL for a summary of commercial license terms.
+
+## Trademark
+
+"Mantismo" and the Mantismo logo are trademarks of Abid Ali Khan.
+
+The AGPL-3.0 license grants you rights to use, modify, and distribute
+the software. It does not grant any rights to use the Mantismo name or
+logo in a way that implies endorsement or could cause confusion with the
+official project.
+
+Permitted uses of the name:
+- Referring to the software accurately ("built with Mantismo",
+  "compatible with Mantismo", "a fork of Mantismo")
+
+Not permitted without written consent:
+- Distributing a modified version under the name "Mantismo"
+- Using "Mantismo" in a product or company name
+- Any use that implies official affiliation or endorsement
+
+## Copyright
+
+Copyright 2026 Abid Ali Khan. All rights reserved.

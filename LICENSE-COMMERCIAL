@@ -1,0 +1,55 @@
+# Mantismo Commercial License
+
+This document summarises the terms under which a commercial license for
+Mantismo is available. A commercial license is required if your use is
+incompatible with the AGPL-3.0 (see LICENSE).
+
+## When You Need a Commercial License
+
+You need a commercial license if you:
+
+- Embed Mantismo in a proprietary product distributed to customers
+- Offer Mantismo (or a product built on it) as a hosted or managed service
+  without making your complete source code available under AGPL-3.0
+- Use Mantismo internally in a commercial organisation and are not able
+  to comply with the AGPL-3.0 source disclosure requirements
+
+You do **not** need a commercial license if you:
+
+- Use Mantismo for personal, non-commercial purposes
+- Use Mantismo in an open-source project licensed under AGPL-3.0
+- Evaluate Mantismo internally before purchasing
+
+## What a Commercial License Grants
+
+- The right to use, modify, and distribute Mantismo in proprietary products
+- The right to offer Mantismo as part of a hosted service without AGPL-3.0
+  source disclosure obligations
+- No copyleft requirements on your surrounding code
+- Access to commercial support (as agreed per contract)
+
+## What a Commercial License Does Not Grant
+
+- The right to sub-license Mantismo to third parties
+- Ownership of the Mantismo trademark or brand
+- Rights to any future proprietary enterprise components (licensed separately)
+
+## Pricing
+
+Commercial licenses are available on a per-organisation basis.
+Pricing is negotiated based on use case and scale.
+
+## Contact
+
+To inquire about a commercial license:
+
+**Email:** abidkhan1974@gmail.com
+
+Please include a brief description of your intended use case and
+organisation size. We typically respond within 2 business days.
+
+---
+
+*This document is a summary for informational purposes.
+A binding commercial license is a separate written agreement
+signed by both parties.*

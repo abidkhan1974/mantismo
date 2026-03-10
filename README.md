@@ -203,3 +203,5 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for more detail.
 ## License
 
 Dual licensed under AGPL-3.0 and a commercial license. See [LICENSE](LICENSE) for details.
+
+"Mantismo" is a trademark of Abid Ali Khan. See [LICENSE](LICENSE) for permitted uses.
