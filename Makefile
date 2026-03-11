@@ -6,23 +6,27 @@ COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 
+# Locate Go — prefer the user's installation, fall back to whatever is in PATH.
+GO      := $(shell command -v go 2>/dev/null || echo $(HOME)/go-install/go/bin/go)
+LINT    := $(shell command -v golangci-lint 2>/dev/null || echo $(HOME)/go-install/go/bin/golangci-lint)
+
 build:
-	CGO_ENABLED=0 go build $(LDFLAGS) -o bin/$(BINARY) ./cmd/mantismo/
+	CGO_ENABLED=0 $(GO) build $(LDFLAGS) -o bin/$(BINARY) ./cmd/mantismo/
 
 test:
-	CGO_ENABLED=0 go test -v -count=1 -timeout 120s $(shell go list ./... | grep -v /e2e)
+	CGO_ENABLED=0 $(GO) test -v -count=1 -timeout 120s $(shell $(GO) list ./... | grep -v /e2e)
 
 test-e2e:
-	CGO_ENABLED=0 go test -v -count=1 -timeout 120s ./e2e/...
+	CGO_ENABLED=0 $(GO) test -v -count=1 -timeout 120s ./e2e/...
 
 lint:
-	golangci-lint run ./...
+	$(LINT) run ./...
 
 clean:
 	rm -rf bin/
 
 install: build
-	cp bin/$(BINARY) $(GOPATH)/bin/
+	sudo install -m 755 bin/$(BINARY) /usr/local/bin/$(BINARY)
 
 dashboard-ui:
-	cd internal/dashboard/ui && npm install && npm run build
+	cd internal/dashboard/ui && npm install && node build.js
