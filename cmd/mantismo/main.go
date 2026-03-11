@@ -198,37 +198,16 @@ func newWrapCmd() *cobra.Command {
 					}
 				}
 				if policyEng == nil {
-					// Fall back to embedded balanced preset
-					balanced := `package mantismo
-import future.keywords.if
-import future.keywords.in
-default decision := {"decision": "allow", "reason": "balanced mode: allowed by default", "rule": "default_allow"}
-decision := {"decision": "allow", "reason": "read-only tool", "rule": "allow_reads"} if {
-    read_tool_prefixes := ["get_", "list_", "search_", "read_", "fetch_", "show_", "describe_", "vault_get_", "vault_search_"]
-    some prefix in read_tool_prefixes
-    startswith(input.tool_name, prefix)
-    not input.tool_changed
-}
-decision := {"decision": "approve", "reason": "write operation requires approval", "rule": "approve_writes"} if {
-    write_tool_prefixes := ["create_", "update_", "delete_", "remove_", "push_", "send_", "execute_", "run_", "write_", "modify_"]
-    some prefix in write_tool_prefixes
-    startswith(input.tool_name, prefix)
-    not input.tool_changed
-}
-decision := {"decision": "deny", "reason": "sampling requests blocked", "rule": "block_sampling"} if {
-    input.method == "sampling/createMessage"
-}
-`
-					tmpPolicyDir, tmpErr := os.MkdirTemp("", "mantismo-policy-*")
-					if tmpErr == nil {
-						regoPath := filepath.Join(tmpPolicyDir, "balanced.rego")
-						if writeErr := os.WriteFile(regoPath, []byte(balanced), 0600); writeErr == nil {
-							if eng, engErr := policy.NewEngine(tmpPolicyDir); engErr == nil {
-								policyEng = eng
-								fmt.Fprintf(os.Stderr, "[mantismo] policy: using built-in balanced preset\n")
-							}
-						}
-						defer os.RemoveAll(tmpPolicyDir)
+					// Fall back to the embedded preset matching the requested preset name.
+					p := cfg.Policy.Preset
+					if p == "" {
+						p = "balanced"
+					}
+					if eng, engErr := policy.NewEngineFromPreset(p); engErr == nil {
+						policyEng = eng
+						fmt.Fprintf(os.Stderr, "[mantismo] policy: using built-in %s preset\n", p)
+					} else {
+						fmt.Fprintf(os.Stderr, "[mantismo] policy: %v — running without policy enforcement\n", engErr)
 					}
 				}
 			}
@@ -862,16 +841,10 @@ func newPolicyCmd() *cobra.Command {
 				fmt.Fprintf(os.Stderr, "Policy already exists at %s\nEdit it directly or delete it to re-init.\n", dst)
 				return nil
 			}
-			// Find built-in preset .rego next to the binary.
-			exe, _ := os.Executable()
-			builtinDir := filepath.Join(filepath.Dir(exe), "..", "policies")
-			src := filepath.Join(builtinDir, preset+".rego")
-			data, err := os.ReadFile(src)
+			// Write the embedded preset to the policy dir.
+			dst, err = policy.WritePresetToDir(preset, policyDir)
 			if err != nil {
-				return fmt.Errorf("preset %q not found (looked in %s): %w", preset, builtinDir, err)
-			}
-			if err := os.WriteFile(dst, data, 0600); err != nil {
-				return fmt.Errorf("write policy: %w", err)
+				return fmt.Errorf("init policy: %w", err)
 			}
 			fmt.Printf("Policy initialised at %s (preset: %s)\n", dst, preset)
 			fmt.Printf("Edit it freely, then restart 'mantismo wrap' to apply changes.\n")
