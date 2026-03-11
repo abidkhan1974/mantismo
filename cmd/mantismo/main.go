@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/abidkhan1974/mantismo/internal/api"
+	apiclient "github.com/abidkhan1974/mantismo/internal/api/client"
 	"github.com/abidkhan1974/mantismo/internal/config"
 	"github.com/abidkhan1974/mantismo/internal/fingerprint"
 	"github.com/abidkhan1974/mantismo/internal/interceptor"
@@ -785,14 +786,45 @@ func newStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show Mantismo status",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(os.Stderr, "Not implemented yet")
+			fmt.Printf("Mantismo %s — Eyes on every agent\n\n", version)
+
+			apiClient := apiclient.NewClient(port)
+			if err := apiClient.Health(); err != nil {
+				// API server not running — show offline status from files.
+				fmt.Printf("  API Server:    not running\n")
+
+				home, _ := os.UserHomeDir()
+				logDir := filepath.Join(home, ".mantismo", "logs")
+				today := time.Now().UTC().Format("2006-01-02")
+				logFile := filepath.Join(logDir, today+".jsonl")
+				if info, err2 := os.Stat(logFile); err2 == nil {
+					fmt.Printf("  Last session:  %s (%s)\n", info.ModTime().Local().Format("2006-01-02 15:04"), formatLogSize(int(info.Size())))
+				}
+				fmt.Printf("\nRun 'mantismo wrap -- <command>' to start a proxy session.\n")
+				return nil
+			}
+
+			stats, err := apiClient.Stats()
+			if err != nil {
+				return fmt.Errorf("stats: %w", err)
+			}
+
+			fmt.Printf("  API Server:    running (localhost:%d)\n", port)
+			if stats.ActiveSession != nil {
+				fmt.Printf("  Active Session: %s (%s)\n", stats.ActiveSession.ID[:8], stats.ActiveSession.ServerCmd)
+			} else {
+				fmt.Printf("  Active Session: none\n")
+			}
+			fmt.Printf("  Dashboard:     http://localhost:%d\n", port)
+			fmt.Printf("\n")
+			fmt.Printf("  Sessions today:   %d\n", stats.SessionsToday)
+			fmt.Printf("  Tool calls today: %d\n", stats.ToolCallsToday)
+			fmt.Printf("  Blocked today:    %d\n", stats.BlockedToday)
 			return nil
 		},
 	}
 
 	cmd.Flags().IntVar(&port, "port", 7777, "API server port")
-	_ = port
-
 	return cmd
 }
 
@@ -801,19 +833,189 @@ func newPolicyCmd() *cobra.Command {
 		Use:   "policy",
 		Short: "Manage security policies",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(os.Stderr, "Not implemented yet")
+			return cmd.Help()
+		},
+	}
+
+	// policy init --preset <balanced|paranoid|permissive>
+	var preset string
+	initCmd := &cobra.Command{
+		Use:   "init",
+		Short: "Generate starter policy from preset",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+			policyDir := filepath.Join(home, ".mantismo", "policies")
+			if err := os.MkdirAll(policyDir, 0700); err != nil {
+				return fmt.Errorf("create policy dir: %w", err)
+			}
+			dst := filepath.Join(policyDir, "policy.rego")
+			if _, err := os.Stat(dst); err == nil {
+				fmt.Fprintf(os.Stderr, "Policy already exists at %s\nEdit it directly or delete it to re-init.\n", dst)
+				return nil
+			}
+			// Find built-in preset .rego next to the binary.
+			exe, _ := os.Executable()
+			builtinDir := filepath.Join(filepath.Dir(exe), "..", "policies")
+			src := filepath.Join(builtinDir, preset+".rego")
+			data, err := os.ReadFile(src)
+			if err != nil {
+				return fmt.Errorf("preset %q not found (looked in %s): %w", preset, builtinDir, err)
+			}
+			if err := os.WriteFile(dst, data, 0600); err != nil {
+				return fmt.Errorf("write policy: %w", err)
+			}
+			fmt.Printf("Policy initialised at %s (preset: %s)\n", dst, preset)
+			fmt.Printf("Edit it freely, then restart 'mantismo wrap' to apply changes.\n")
+			return nil
+		},
+	}
+	initCmd.Flags().StringVar(&preset, "preset", "balanced", "Preset to use: balanced, paranoid, permissive")
+
+	// policy list
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "Show loaded policy rules",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+			policyDir := filepath.Join(home, ".mantismo", "policies")
+			entries, err := os.ReadDir(policyDir)
+			if err != nil {
+				fmt.Println("No custom policy directory found.")
+				fmt.Printf("Run 'mantismo policy init' to create one, or use --preset on 'mantismo wrap'.\n")
+				return nil
+			}
+			var regoFiles []string
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".rego") {
+					regoFiles = append(regoFiles, filepath.Join(policyDir, e.Name()))
+				}
+			}
+			if len(regoFiles) == 0 {
+				fmt.Printf("Policy directory %s has no .rego files.\n", policyDir)
+				return nil
+			}
+			for _, f := range regoFiles {
+				data, err := os.ReadFile(f)
+				if err != nil {
+					continue
+				}
+				fmt.Printf("# %s\n%s\n", f, string(data))
+			}
 			return nil
 		},
 	}
 
-	cmd.AddCommand(
-		&cobra.Command{Use: "init", Short: "Generate starter policy from preset", RunE: notImplemented},
-		&cobra.Command{Use: "check", Short: "Dry-run policy against recent logs", RunE: notImplemented},
-		&cobra.Command{Use: "list", Short: "Show loaded policy rules", RunE: notImplemented},
-		&cobra.Command{Use: "edit", Short: "Open policy file in $EDITOR", RunE: notImplemented},
-	)
+	// policy edit
+	editCmd := &cobra.Command{
+		Use:   "edit",
+		Short: "Open policy file in $EDITOR",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+			policyFile := filepath.Join(home, ".mantismo", "policies", "policy.rego")
+			if _, err := os.Stat(policyFile); err != nil {
+				return fmt.Errorf("policy file not found at %s — run 'mantismo policy init' first", policyFile)
+			}
+			editor := os.Getenv("EDITOR")
+			if editor == "" {
+				editor = os.Getenv("VISUAL")
+			}
+			if editor == "" {
+				editor = "vi"
+			}
+			c := exec.Command(editor, policyFile)
+			c.Stdin = os.Stdin
+			c.Stdout = os.Stdout
+			c.Stderr = os.Stderr
+			return c.Run()
+		},
+	}
 
+	// policy check — dry-run recent logs against current policy
+	checkCmd := &cobra.Command{
+		Use:   "check",
+		Short: "Dry-run policy against recent logs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+			policyDir := filepath.Join(home, ".mantismo", "policies")
+			eng, err := policy.NewEngine(policyDir)
+			if err != nil {
+				return fmt.Errorf("load policy: %w", err)
+			}
+
+			// Read today's logs.
+			logDir := filepath.Join(home, ".mantismo", "logs")
+			since := time.Now().UTC().Truncate(24 * time.Hour)
+			entries, err := logger.Query(logDir, logger.QueryFilter{Since: &since})
+			if err != nil {
+				return fmt.Errorf("read logs: %w", err)
+			}
+
+			toolCalls := 0
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "TOOL\tMETHOD\tDECISION\tREASON")
+			for _, e := range entries {
+				if e.Method != "tools/call" || e.ToolName == "" {
+					continue
+				}
+				toolCalls++
+				result, evalErr := eng.Evaluate(policy.EvalInput{
+					Method:   e.Method,
+					ToolName: e.ToolName,
+				})
+				if evalErr != nil {
+					fmt.Fprintf(w, "%s\t%s\t%s\t%v\n", e.ToolName, e.Method, "error", evalErr)
+					continue
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.ToolName, e.Method, string(result.Decision), result.Reason)
+			}
+			w.Flush()
+			if toolCalls == 0 {
+				fmt.Println("No tool calls in today's logs to check.")
+			}
+			return nil
+		},
+	}
+
+	cmd.AddCommand(initCmd, listCmd, editCmd, checkCmd)
 	return cmd
+}
+
+// vaultPath returns the default vault DB path.
+func vaultPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".mantismo", "vault.db"), nil
+}
+
+// readPassphrase reads a passphrase from the terminal without echo.
+func readPassphrase(prompt string) (string, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	// Use stty to disable echo, then read, then re-enable.
+	if err := exec.Command("stty", "-echo").Run(); err != nil {
+		// Fall back to plain read if stty unavailable.
+		var s string
+		_, err2 := fmt.Scanln(&s)
+		return s, err2
+	}
+	defer func() { _ = exec.Command("stty", "echo").Run() }()
+	var s string
+	_, err := fmt.Scanln(&s)
+	fmt.Fprintln(os.Stderr) // newline after hidden input
+	return s, err
 }
 
 func newVaultCmd() *cobra.Command {
@@ -821,21 +1023,282 @@ func newVaultCmd() *cobra.Command {
 		Use:   "vault",
 		Short: "Manage the personal data vault",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(os.Stderr, "Not implemented yet")
+			return cmd.Help()
+		},
+	}
+
+	// vault init
+	var passFlag string
+	initCmd := &cobra.Command{
+		Use:   "init",
+		Short: "Initialize the vault",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dbPath, err := vaultPath()
+			if err != nil {
+				return err
+			}
+			if _, err := os.Stat(dbPath); err == nil {
+				fmt.Fprintf(os.Stderr, "Vault already exists at %s\n", dbPath)
+				return nil
+			}
+			pass := passFlag
+			if pass == "" {
+				pass, err = readPassphrase("New passphrase: ")
+				if err != nil {
+					return err
+				}
+				confirm, err := readPassphrase("Confirm passphrase: ")
+				if err != nil {
+					return err
+				}
+				if pass != confirm {
+					return fmt.Errorf("passphrases do not match")
+				}
+			}
+			v, err := vault.Open(dbPath, pass)
+			if err != nil {
+				return fmt.Errorf("create vault: %w", err)
+			}
+			_ = v.Close()
+			fmt.Printf("Vault initialised at %s\n", dbPath)
+			return nil
+		},
+	}
+	initCmd.Flags().StringVar(&passFlag, "passphrase", "", "Passphrase (omit to prompt interactively)")
+
+	// vault list [--category <cat>]
+	var catFlag string
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List vault entries by category",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dbPath, err := vaultPath()
+			if err != nil {
+				return err
+			}
+			pass, err := readPassphrase("Vault passphrase: ")
+			if err != nil {
+				return err
+			}
+			v, err := vault.Open(dbPath, pass)
+			if err != nil {
+				return fmt.Errorf("open vault: %w", err)
+			}
+			defer v.Close()
+
+			var cat *vault.Category
+			if catFlag != "" {
+				c := vault.Category(catFlag)
+				cat = &c
+			}
+			entries, err := v.List(cat, nil)
+			if err != nil {
+				return fmt.Errorf("list: %w", err)
+			}
+			if len(entries) == 0 {
+				fmt.Println("No entries found.")
+				return nil
+			}
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "KEY\tCATEGORY\tSENSITIVITY\tLABEL")
+			for _, e := range entries {
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.Key, string(e.Category), string(e.Sensitivity), e.Label)
+			}
+			w.Flush()
+			return nil
+		},
+	}
+	listCmd.Flags().StringVar(&catFlag, "category", "", "Filter by category (profile, identifiers, credentials_meta, etc.)")
+
+	// vault get <key>
+	getCmd := &cobra.Command{
+		Use:   "get <key>",
+		Short: "Get a specific vault entry",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dbPath, err := vaultPath()
+			if err != nil {
+				return err
+			}
+			pass, err := readPassphrase("Vault passphrase: ")
+			if err != nil {
+				return err
+			}
+			v, err := vault.Open(dbPath, pass)
+			if err != nil {
+				return fmt.Errorf("open vault: %w", err)
+			}
+			defer v.Close()
+
+			entry, err := v.Get(args[0])
+			if err != nil {
+				return fmt.Errorf("get %q: %w", args[0], err)
+			}
+			fmt.Printf("Key:         %s\n", entry.Key)
+			fmt.Printf("Value:       %s\n", entry.Value)
+			fmt.Printf("Category:    %s\n", string(entry.Category))
+			fmt.Printf("Sensitivity: %s\n", string(entry.Sensitivity))
+			fmt.Printf("Label:       %s\n", entry.Label)
 			return nil
 		},
 	}
 
-	cmd.AddCommand(
-		&cobra.Command{Use: "init", Short: "Initialize the vault", RunE: notImplemented},
-		&cobra.Command{Use: "import", Short: "Interactive import wizard", RunE: notImplemented},
-		&cobra.Command{Use: "list", Short: "List vault entries by category", RunE: notImplemented},
-		&cobra.Command{Use: "get", Short: "Get a specific vault entry", RunE: notImplemented},
-		&cobra.Command{Use: "set", Short: "Set a vault entry", RunE: notImplemented},
-		&cobra.Command{Use: "delete", Short: "Delete a vault entry", RunE: notImplemented},
-		&cobra.Command{Use: "export", Short: "Export vault data (decrypted, for backup)", RunE: notImplemented},
-		&cobra.Command{Use: "lock", Short: "Lock the vault", RunE: notImplemented},
-		&cobra.Command{Use: "unlock", Short: "Unlock the vault (enter passphrase)", RunE: notImplemented},
+	// vault set <key> <value> [--category <cat>] [--sensitivity <s>] [--label <l>]
+	var setCat, setSens, setLabel string
+	setCmd := &cobra.Command{
+		Use:   "set <key> <value>",
+		Short: "Set a vault entry",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dbPath, err := vaultPath()
+			if err != nil {
+				return err
+			}
+			pass, err := readPassphrase("Vault passphrase: ")
+			if err != nil {
+				return err
+			}
+			v, err := vault.Open(dbPath, pass)
+			if err != nil {
+				return fmt.Errorf("open vault: %w", err)
+			}
+			defer v.Close()
+
+			cat := vault.Profile
+			if setCat != "" {
+				cat = vault.Category(setCat)
+			}
+			sens := vault.Standard
+			if setSens != "" {
+				sens = vault.Sensitivity(setSens)
+			}
+			entry := vault.Entry{
+				Key:         args[0],
+				Value:       args[1],
+				Category:    cat,
+				Sensitivity: sens,
+				Label:       setLabel,
+			}
+			if err := v.Set(entry); err != nil {
+				return fmt.Errorf("set: %w", err)
+			}
+			fmt.Printf("Stored %s\n", args[0])
+			return nil
+		},
+	}
+	setCmd.Flags().StringVar(&setCat, "category", "", "Category (profile, identifiers, credentials_meta, preferences, documents, financial)")
+	setCmd.Flags().StringVar(&setSens, "sensitivity", "", "Sensitivity (public, standard, sensitive, critical)")
+	setCmd.Flags().StringVar(&setLabel, "label", "", "Human-readable label")
+
+	// vault delete <key>
+	deleteCmd := &cobra.Command{
+		Use:   "delete <key>",
+		Short: "Delete a vault entry",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dbPath, err := vaultPath()
+			if err != nil {
+				return err
+			}
+			pass, err := readPassphrase("Vault passphrase: ")
+			if err != nil {
+				return err
+			}
+			v, err := vault.Open(dbPath, pass)
+			if err != nil {
+				return fmt.Errorf("open vault: %w", err)
+			}
+			defer v.Close()
+
+			if err := v.Delete(args[0]); err != nil {
+				return fmt.Errorf("delete: %w", err)
+			}
+			fmt.Printf("Deleted %s\n", args[0])
+			return nil
+		},
+	}
+
+	// vault export [--output <file>]
+	var exportOut string
+	exportCmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export vault data (decrypted) to JSON",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dbPath, err := vaultPath()
+			if err != nil {
+				return err
+			}
+			pass, err := readPassphrase("Vault passphrase: ")
+			if err != nil {
+				return err
+			}
+			v, err := vault.Open(dbPath, pass)
+			if err != nil {
+				return fmt.Errorf("open vault: %w", err)
+			}
+			defer v.Close()
+
+			entries, err := v.Export()
+			if err != nil {
+				return fmt.Errorf("export: %w", err)
+			}
+			data, err := json.MarshalIndent(entries, "", "  ")
+			if err != nil {
+				return err
+			}
+			if exportOut == "" || exportOut == "-" {
+				fmt.Println(string(data))
+				return nil
+			}
+			if err := os.WriteFile(exportOut, data, 0600); err != nil {
+				return fmt.Errorf("write %s: %w", exportOut, err)
+			}
+			fmt.Printf("Exported %d entries to %s\n", len(entries), exportOut)
+			return nil
+		},
+	}
+	exportCmd.Flags().StringVar(&exportOut, "output", "-", "Output file (default: stdout)")
+
+	// vault stats
+	statsCmd := &cobra.Command{
+		Use:   "stats",
+		Short: "Show vault statistics",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dbPath, err := vaultPath()
+			if err != nil {
+				return err
+			}
+			pass, err := readPassphrase("Vault passphrase: ")
+			if err != nil {
+				return err
+			}
+			v, err := vault.Open(dbPath, pass)
+			if err != nil {
+				return fmt.Errorf("open vault: %w", err)
+			}
+			defer v.Close()
+
+			stats, err := v.Stats()
+			if err != nil {
+				return fmt.Errorf("stats: %w", err)
+			}
+			fmt.Printf("Total entries: %d\n\nBy category:\n", stats.TotalEntries)
+			for cat, count := range stats.ByCategory {
+				fmt.Printf("  %-25s %d\n", string(cat), count)
+			}
+			fmt.Printf("\nBy sensitivity:\n")
+			for sens, count := range stats.BySensitivity {
+				fmt.Printf("  %-12s %d\n", string(sens), count)
+			}
+			return nil
+		},
+	}
+
+	cmd.AddCommand(initCmd, listCmd, getCmd, setCmd, deleteCmd, exportCmd, statsCmd,
+		&cobra.Command{Use: "lock", Short: "Lock the vault (close active session)", RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Vault locked. Passphrase will be required on next access.")
+			return nil
+		}},
 	)
 
 	return cmd
@@ -975,24 +1438,88 @@ func newDoctorCmd() *cobra.Command {
 
 func newDashboardCmd() *cobra.Command {
 	var port int
-	var open bool
+	var openBrowser bool
 
 	cmd := &cobra.Command{
 		Use:   "dashboard",
 		Short: "Launch the local web dashboard",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(os.Stderr, "Not implemented yet")
-			return nil
+			url := fmt.Sprintf("http://localhost:%d", port)
+
+			// If API server is already running (from mantismo wrap), just open the browser.
+			apiClient := apiclient.NewClient(port)
+			if err := apiClient.Health(); err == nil {
+				fmt.Fprintf(os.Stderr, "Dashboard: %s\n", url)
+				if openBrowser {
+					return openURL(url)
+				}
+				fmt.Fprintf(os.Stderr, "API server is running. Open %s in your browser.\n", url)
+				return nil
+			}
+
+			// Start a read-only API server for historical data.
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+			logPath := filepath.Join(home, ".mantismo", "logs")
+			fpPath := filepath.Join(home, ".mantismo", "fingerprints.json")
+
+			log, err := logger.New(logPath, "dashboard")
+			if err != nil {
+				return fmt.Errorf("logger: %w", err)
+			}
+			fpStore, err := fingerprint.NewStore(fpPath)
+			if err != nil {
+				return fmt.Errorf("fingerprints: %w", err)
+			}
+
+			srv := api.NewServer(api.Config{Port: port}, api.Dependencies{
+				Logger:       log,
+				Fingerprints: fpStore,
+				Sessions:     api.NewSessionStore(),
+			})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if err := srv.Start(ctx); err != nil {
+				return fmt.Errorf("start API server: %w", err)
+			}
+			fmt.Fprintf(os.Stderr, "[mantismo] Dashboard: %s\n", url)
+			if openBrowser {
+				_ = openURL(url)
+			}
+
+			// Block until Ctrl+C.
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+			<-sigCh
+			fmt.Fprintln(os.Stderr, "\n[mantismo] Shutting down.")
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer stopCancel()
+			return srv.Stop(stopCtx)
 		},
 	}
 
 	cmd.Flags().IntVar(&port, "port", 7777, "Port")
-	cmd.Flags().BoolVar(&open, "open", false, "Open browser automatically")
-
-	_ = port
-	_ = open
-
+	cmd.Flags().BoolVar(&openBrowser, "open", false, "Open browser automatically")
 	return cmd
+}
+
+// openURL opens a URL in the default browser.
+func openURL(url string) error {
+	var c *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		c = exec.Command("open", url)
+	case "linux":
+		c = exec.Command("xdg-open", url)
+	case "windows":
+		c = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		fmt.Println(url)
+		return nil
+	}
+	return c.Start()
 }
 
 func notImplemented(cmd *cobra.Command, args []string) error {
