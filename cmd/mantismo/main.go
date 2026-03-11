@@ -15,8 +15,10 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -236,6 +238,9 @@ decision := {"decision": "deny", "reason": "sampling requests blocked", "rule": 
 			// ── Request tracker (for duration logging) ────────────────────────────
 			tracker := logger.NewRequestTracker()
 
+			// ── Method correlator: maps requestID → method for response logging ──
+			var methodMap sync.Map
+
 			// ── Vault tools handler (nil vault = vault not initialized) ───────────
 			var vaultHandler *vaulttools.Handler
 			if !noVault {
@@ -355,10 +360,15 @@ decision := {"decision": "deny", "reason": "sampling requests blocked", "rule": 
 					}
 
 					var durationMs *float64
+					method := msg.Method
 					if msg.IsRequest && msg.ID != nil {
 						tracker.TrackRequest(*msg.ID)
+						methodMap.Store(string(*msg.ID), msg.Method)
 					} else if msg.IsResponse && msg.ID != nil {
 						durationMs = tracker.CompleteRequest(*msg.ID)
+						if v, ok := methodMap.LoadAndDelete(string(*msg.ID)); ok {
+							method = v.(string) //nolint:forcetypeassert
+						}
 					}
 
 					entry := logger.LogEntry{
@@ -366,12 +376,12 @@ decision := {"decision": "deny", "reason": "sampling requests blocked", "rule": 
 						SessionID:   sessionID,
 						Direction:   dirStr,
 						MessageType: msgType,
-						Method:      msg.Method,
+						Method:      method,
 						RequestID:   msg.ID,
 						RawSize:     len(msg.Raw),
 						DurationMs:  durationMs,
 						Summary: logger.BuildSummary(
-							dirStr, msgType, msg.Method, "",
+							dirStr, msgType, method, "",
 							durationMs, len(msg.Raw), msg.IsError, nil, "",
 						),
 					}
@@ -686,7 +696,7 @@ func followLogs(logDir string, since *time.Time) error {
 }
 
 func newToolsCmd() *cobra.Command {
-	var changed bool
+	var changedOnly bool
 	var jsonOut bool
 	var port int
 
@@ -694,18 +704,76 @@ func newToolsCmd() *cobra.Command {
 		Use:   "tools",
 		Short: "List tools seen across sessions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(os.Stderr, "Not implemented yet")
+			_ = port // reserved for future API mode
+
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("home dir: %w", err)
+			}
+			fpPath := filepath.Join(home, ".mantismo", "fingerprints.json")
+			fpStore, err := fingerprint.NewStore(fpPath)
+			if err != nil {
+				return fmt.Errorf("open fingerprints: %w", err)
+			}
+
+			all := fpStore.All()
+			if len(all) == 0 {
+				fmt.Fprintln(os.Stderr, "No tools fingerprinted yet. Run 'mantismo wrap' to capture tool definitions.")
+				return nil
+			}
+
+			names := make([]string, 0, len(all))
+			for name := range all {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+
+			if jsonOut {
+				for _, name := range names {
+					fp := all[name]
+					if changedOnly && fp.Acknowledged {
+						continue
+					}
+					b, _ := json.Marshal(fp)
+					fmt.Println(string(b))
+				}
+				return nil
+			}
+
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "NAME\tHASH\tSTATUS\tFIRST SEEN\tLAST SEEN\tSERVER")
+			for _, name := range names {
+				fp := all[name]
+				if changedOnly && fp.Acknowledged {
+					continue
+				}
+				status := "ok"
+				if !fp.Acknowledged {
+					status = "new"
+				}
+				hash := fp.Hash
+				if len(hash) > 8 {
+					hash = hash[:8]
+				}
+				srv := fp.ServerCmd
+				if len(srv) > 50 {
+					srv = srv[:47] + "..."
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+					name, hash, status,
+					fp.FirstSeen.Local().Format("2006-01-02 15:04"),
+					fp.LastSeen.Local().Format("2006-01-02 15:04"),
+					srv,
+				)
+			}
+			w.Flush()
 			return nil
 		},
 	}
 
-	cmd.Flags().BoolVar(&changed, "changed", false, "Only show tools whose descriptions have changed")
+	cmd.Flags().BoolVar(&changedOnly, "changed", false, "Only show tools whose descriptions have changed")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 	cmd.Flags().IntVar(&port, "port", 7777, "API server port")
-
-	_ = changed
-	_ = jsonOut
-	_ = port
 
 	return cmd
 }
