@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abidkhan1974/mantismo/internal/approval"
 	"github.com/abidkhan1974/mantismo/internal/dashboard"
 	"github.com/abidkhan1974/mantismo/internal/fingerprint"
 	"github.com/abidkhan1974/mantismo/internal/logger"
@@ -147,6 +148,18 @@ type Server struct {
 	// Live log streaming.
 	subsMu sync.Mutex
 	subs   map[chan logger.LogEntry]struct{}
+
+	// approvalBE is the WebSocket approval backend (set after construction).
+	approvalBEMu sync.RWMutex
+	approvalBE   *approval.WebSocketBackend
+}
+
+// SetApprovalBackend connects the WebSocket approval backend so the
+// /api/ws/approvals handler delegates to it directly.
+func (s *Server) SetApprovalBackend(be *approval.WebSocketBackend) {
+	s.approvalBEMu.Lock()
+	s.approvalBE = be
+	s.approvalBEMu.Unlock()
 }
 
 // NewServer creates a new API Server.
@@ -492,27 +505,29 @@ func (s *Server) handleWSApprovals(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	// Delegate to the approval WebSocket backend if it's been wired in.
+	s.approvalBEMu.RLock()
+	be := s.approvalBE
+	s.approvalBEMu.RUnlock()
+	if be != nil {
+		be.HandleConnection(conn)
+		return
+	}
+
+	// Fallback: drain the legacy channel (no response routing).
 	approvalCh := s.deps.ApprovalCh
 	if approvalCh == nil {
 		return
 	}
-
 	done := make(chan struct{})
 	go func() {
 		for {
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
+			if _, _, err := conn.ReadMessage(); err != nil {
 				close(done)
 				return
 			}
-			var resp ApprovalResponse
-			if err := json.Unmarshal(msg, &resp); err == nil {
-				// Response handling will be wired to approval gateway in spec 11.
-				_ = resp
-			}
 		}
 	}()
-
 	for {
 		select {
 		case <-done:
