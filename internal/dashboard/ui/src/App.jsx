@@ -32,8 +32,8 @@ export default function App() {
     let ws;
     let reconnectTimer;
     const connect = () => {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${location.host}/api/ws/approvals`);
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${window.location.host}/api/ws/approvals`);
       ws.onmessage = (e) => {
         try {
           const req = JSON.parse(e.data);

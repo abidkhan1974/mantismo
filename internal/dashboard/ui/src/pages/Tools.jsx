@@ -24,7 +24,10 @@ export default function Tools() {
             </div>
             <div className="text-xs opacity-60">{t.server_cmd || 'native'}</div>
             {t.changed && (
-              <button className="mt-2 text-xs px-2 py-1 rounded" style={{background:'var(--accent)',color:'white'}}>
+              <button className="mt-2 text-xs px-2 py-1 rounded" style={{background:'var(--accent)',color:'white'}}
+                onClick={() => fetch(`/api/tools/${encodeURIComponent(t.name)}/acknowledge`, {method:'POST'})
+                  .then(() => setTools(prev => prev.map(x => x.name===t.name ? {...x, changed:false} : x)))
+                  .catch(console.error)}>
                 Acknowledge
               </button>
             )}

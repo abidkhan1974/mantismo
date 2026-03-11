@@ -102,6 +102,24 @@ func (s *SessionStore) All() []SessionInfo {
 	return all
 }
 
+// IncrToolCall increments the active session's tool call counter.
+func (s *SessionStore) IncrToolCall() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active != nil {
+		s.active.ToolCalls++
+	}
+}
+
+// IncrBlocked increments the active session's blocked counter.
+func (s *SessionStore) IncrBlocked() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active != nil {
+		s.active.Blocked++
+	}
+}
+
 // Config holds API server configuration.
 type Config struct {
 	Port     int
@@ -183,6 +201,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/logs", s.handleLogs)
 	mux.HandleFunc("/api/tools", s.handleTools)
+	mux.HandleFunc("/api/tools/", s.handleToolsAction)
 	mux.HandleFunc("/api/stats", s.handleStats)
 	mux.HandleFunc("/api/sessions", s.handleSessions)
 	mux.HandleFunc("/api/policy", s.handlePolicy)
@@ -325,6 +344,26 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tools)
 }
 
+// handleToolsAction handles POST /api/tools/{name}/acknowledge
+func (s *Server) handleToolsAction(w http.ResponseWriter, r *http.Request) {
+	// path: /api/tools/{name}/acknowledge
+	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/api/tools/"), "/", 2)
+	if len(parts) != 2 || parts[1] != "acknowledge" || r.Method != http.MethodPost {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	name := parts[0]
+	if s.deps.Fingerprints == nil {
+		http.Error(w, "fingerprints not available", http.StatusServiceUnavailable)
+		return
+	}
+	if err := s.deps.Fingerprints.Acknowledge(name); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -334,13 +373,19 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	entries, _ := logger.Query(s.deps.LogDir, logger.QueryFilter{Since: &today})
 	toolCalls, blocked := 0, 0
+	hourly := make(map[int]int) // hour -> count
 	for _, e := range entries {
-		if e.Method == "tools/call" && e.MessageType == "request" {
+		if (e.Method == "tools/call" || e.Method == "tools/list") && e.MessageType == "request" {
 			toolCalls++
+			hourly[e.Timestamp.Hour()]++
 		}
 		if e.PolicyDecision == "deny" {
 			blocked++
 		}
+	}
+	chartData := make([]map[string]any, 24)
+	for i := range chartData {
+		chartData[i] = map[string]any{"hour": fmt.Sprintf("%02d:00", i), "calls": hourly[i]}
 	}
 	var activeSession *SessionInfo
 	if s.deps.Sessions != nil {
@@ -355,6 +400,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"blocked_today":    blocked,
 		"sessions_today":   sessionsCount,
 		"active_session":   activeSession,
+		"chart_data":       chartData,
 	})
 }
 

@@ -33,7 +33,7 @@ export default function Home() {
     return () => ws && ws.close();
   }, []);
 
-  const chartData = Array.from({length: 24}, (_, i) => ({
+  const chartData = stats?.chart_data ?? Array.from({length: 24}, (_, i) => ({
     hour: `${String(i).padStart(2,'0')}:00`,
     calls: 0,
   }));

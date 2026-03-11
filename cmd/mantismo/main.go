@@ -139,7 +139,7 @@ func newWrapCmd() *cobra.Command {
 			sessions.SetActive(&api.SessionInfo{
 				ID:        sessionID,
 				StartedAt: time.Now().UTC(),
-				ServerCmd: args[0],
+				ServerCmd: strings.Join(args, " "),
 			})
 			defer sessions.EndActive()
 
@@ -388,6 +388,12 @@ decision := {"decision": "deny", "reason": "sampling requests blocked", "rule": 
 					}
 					_ = log.Log(entry)
 					apiSrv.PublishLog(entry)
+					if msg.IsRequest && method == "tools/call" {
+						sessions.IncrToolCall()
+					}
+					if entry.PolicyDecision == "deny" {
+						sessions.IncrBlocked()
+					}
 				},
 			})
 
