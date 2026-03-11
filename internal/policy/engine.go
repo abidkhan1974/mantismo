@@ -88,6 +88,9 @@ func (e *Engine) Evaluate(input EvalInput) (EvalResult, error) {
 // Reload reloads policies from policyDir. Safe to call concurrently.
 func (e *Engine) Reload(policyDir string) error {
 	modules := loadModules(policyDir)
+	if len(modules) == 0 {
+		return fmt.Errorf("policy: no .rego files found in %q", policyDir)
+	}
 
 	opts := []func(*rego.Rego){
 		rego.Query("data.mantismo.decision"),

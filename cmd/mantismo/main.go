@@ -27,6 +27,7 @@ import (
 
 	"github.com/abidkhan1974/mantismo/internal/api"
 	apiclient "github.com/abidkhan1974/mantismo/internal/api/client"
+	"github.com/abidkhan1974/mantismo/internal/approval"
 	"github.com/abidkhan1974/mantismo/internal/config"
 	"github.com/abidkhan1974/mantismo/internal/fingerprint"
 	"github.com/abidkhan1974/mantismo/internal/interceptor"
@@ -170,6 +171,17 @@ func newWrapCmd() *cobra.Command {
 			fmt.Fprintf(os.Stderr, "[mantismo] policy preset: %s\n", cfg.Policy.Preset)
 			fmt.Fprintf(os.Stderr, "[mantismo] session: %s\n", sessionID)
 
+			// ── Approval gateway ──────────────────────────────────────────────────
+			permFile := filepath.Join(dataDir, "allows.json")
+			wsBE := approval.NewWebSocketBackend()
+			apiSrv.SetApprovalBackend(wsBE)
+			approvalGateway := approval.NewGateway(
+				60*time.Second,
+				permFile,
+				wsBE,
+				approval.NewTerminalBackend(),
+			)
+
 			// Suppress unused variable warnings.
 			_ = logLevel
 			_ = noPolicy
@@ -287,19 +299,43 @@ func newWrapCmd() *cobra.Command {
 									},
 								}
 							case policy.Allow:
+								fmt.Fprintf(os.Stderr, "[mantismo] ALLOW: %s — %s\n", req.ToolName, result.Reason)
 								// fall through to forward
 							case policy.Approve:
-								// Approval gateway not yet wired; auto-deny.
-								fmt.Fprintf(os.Stderr,
-									"[mantismo] APPROVAL REQUIRED: %s — %s (auto-denied, no approval backend)\n",
-									req.ToolName, result.Reason)
-								return interceptor.InterceptResult{
-									Action: interceptor.Block,
-									Error: &interceptor.JSONRPCError{
-										Code:    -32000,
-										Message: "approval required: " + result.Reason,
-									},
+								fmt.Fprintf(os.Stderr, "[mantismo] APPROVE: %s — %s (dashboard: %v)\n",
+									req.ToolName, result.Reason, wsBE.Available())
+								argSummary := ""
+								if len(req.Arguments) > 0 {
+									argSummary = string(req.Arguments)
+									if len(argSummary) > 200 {
+										argSummary = argSummary[:200] + "…"
+									}
 								}
+								prompt := approval.ApprovalPrompt{
+									ID:        fmt.Sprintf("%s-%d", req.ToolName, time.Now().UnixNano()),
+									ToolName:  req.ToolName,
+									ServerCmd: strings.Join(args, " "),
+									Reason:    result.Reason,
+									Arguments: argSummary,
+									RiskLevel: result.Rule,
+									CreatedAt: time.Now(),
+									ExpiresAt: time.Now().Add(60 * time.Second),
+								}
+								grant, grantErr := approvalGateway.RequestApproval(ctx, prompt)
+								if grantErr != nil || grant.Decision != approval.Approved {
+									reason := result.Reason
+									if grantErr != nil {
+										reason = grantErr.Error()
+									}
+									return interceptor.InterceptResult{
+										Action: interceptor.Block,
+										Error: &interceptor.JSONRPCError{
+											Code:    -32000,
+											Message: "approval denied: " + reason,
+										},
+									}
+								}
+								// Approved — fall through to forward.
 							}
 						}
 					}
