@@ -17,6 +17,9 @@ export default function Home() {
 
   useEffect(() => {
     fetch('/api/stats').then(r=>r.json()).then(setStats).catch(()=>{});
+    fetch('/api/logs?since=1h&limit=50').then(r=>r.json()).then(logs => {
+      if (Array.isArray(logs)) setEntries([...logs].reverse());
+    }).catch(()=>{});
   }, []);
 
   useEffect(() => {

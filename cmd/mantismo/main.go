@@ -388,7 +388,7 @@ decision := {"decision": "deny", "reason": "sampling requests blocked", "rule": 
 					}
 					_ = log.Log(entry)
 					apiSrv.PublishLog(entry)
-					if msg.IsRequest && method == "tools/call" {
+					if msg.IsRequest {
 						sessions.IncrToolCall()
 					}
 					if entry.PolicyDecision == "deny" {
