@@ -496,7 +496,17 @@ func newLogsCmd() *cobra.Command {
 				if e.PolicyDecision != "" {
 					policy = "[" + e.PolicyDecision + "]"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ts, e.Summary, size, policy)
+				// Summary already contains a leading arrow (→ / ←).
+				// Strip it and show direction in its own column for clean alignment.
+				summary := e.Summary
+				dir := "→"
+				if strings.HasPrefix(summary, "← ") {
+					dir = "←"
+					summary = summary[3:]
+				} else if strings.HasPrefix(summary, "→ ") {
+					summary = summary[3:]
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", ts, dir, summary, size, policy)
 			}
 			w.Flush()
 			return nil
@@ -580,7 +590,15 @@ func followLogs(logDir string, since *time.Time) error {
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			for _, e := range entries {
 				ts := e.Timestamp.Local().Format("2006-01-02 15:04:05")
-				fmt.Fprintf(w, "%s\t%s\t%s\n", ts, e.Summary, formatLogSize(e.RawSize))
+				summary := e.Summary
+				dir := "→"
+				if strings.HasPrefix(summary, "← ") {
+					dir = "←"
+					summary = summary[3:]
+				} else if strings.HasPrefix(summary, "→ ") {
+					summary = summary[3:]
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ts, dir, summary, formatLogSize(e.RawSize))
 			}
 			w.Flush()
 		}
@@ -652,7 +670,15 @@ func followLogs(logDir string, since *time.Time) error {
 				continue
 			}
 			ts := e.Timestamp.Local().Format("2006-01-02 15:04:05")
-			fmt.Fprintf(w, "%s\t%s\t%s\n", ts, e.Summary, formatLogSize(e.RawSize))
+			summary := e.Summary
+			dir := "→"
+			if strings.HasPrefix(summary, "← ") {
+				dir = "←"
+				summary = summary[3:]
+			} else if strings.HasPrefix(summary, "→ ") {
+				summary = summary[3:]
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ts, dir, summary, formatLogSize(e.RawSize))
 			w.Flush()
 		}
 	}
