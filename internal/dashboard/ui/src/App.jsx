@@ -18,32 +18,38 @@ const NAV = [
 export default function App() {
   const location = useLocation();
   const [approvals, setApprovals] = useState([]);
+  const wsRef = React.useRef(null);
 
   const handleApprovalResponse = useCallback((id, allowed, scope) => {
-    fetch(`/api/approval/${id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, allowed, grant_scope: scope }),
-    }).catch(console.error);
+    const decision = allowed ? 'approved' : 'denied';
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'approval_response',
+        data: { id, decision, grant_scope: scope },
+      }));
+    }
     setApprovals(prev => prev.filter(a => a.id !== id));
   }, []);
 
   useEffect(() => {
-    let ws;
     let reconnectTimer;
     const connect = () => {
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${window.location.host}/api/ws/approvals`);
+      const ws = new WebSocket(`${proto}://${window.location.host}/api/ws/approvals`);
+      wsRef.current = ws;
       ws.onmessage = (e) => {
         try {
-          const req = JSON.parse(e.data);
+          const env = JSON.parse(e.data);
+          // Backend sends {type: "approval_request", data: ApprovalPrompt}
+          const req = env.type === 'approval_request' ? env.data : env;
+          if (!req || !req.id) return;
           setApprovals(prev => [...prev.filter(a => a.id !== req.id), req]);
         } catch (_) {}
       };
       ws.onclose = () => { reconnectTimer = setTimeout(connect, 3000); };
     };
     connect();
-    return () => { ws && ws.close(); clearTimeout(reconnectTimer); };
+    return () => { wsRef.current && wsRef.current.close(); clearTimeout(reconnectTimer); };
   }, []);
 
   return (
