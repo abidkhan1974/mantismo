@@ -1,5 +1,21 @@
 # Troubleshooting
 
+## `make build` fails with `go: command not found`
+
+Go is not in your shell's PATH. Either add it:
+
+```bash
+export PATH="$HOME/go-install/go/bin:$PATH"
+```
+
+Or build directly:
+
+```bash
+CGO_ENABLED=0 ~/go-install/go/bin/go build -o bin/mantismo ./cmd/mantismo/
+```
+
+---
+
 ## macOS: Binary killed immediately (`zsh: killed`)
 
 Gatekeeper is rejecting a locally-built binary.
