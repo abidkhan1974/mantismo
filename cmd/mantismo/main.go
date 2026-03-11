@@ -6,14 +6,19 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -426,13 +431,74 @@ func newLogsCmd() *cobra.Command {
 	var limit int
 	var jsonOut bool
 	var follow bool
-	var port int
 
 	cmd := &cobra.Command{
 		Use:   "logs",
 		Short: "View and query audit logs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(os.Stderr, "Not implemented yet")
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("home dir: %w", err)
+			}
+			logDir := filepath.Join(home, ".mantismo", "logs")
+
+			sinceT, err := parseTimeArg(since, -24*time.Hour)
+			if err != nil {
+				return fmt.Errorf("--since: %w", err)
+			}
+			untilT, err := parseTimeArg(until, 0)
+			if err != nil {
+				return fmt.Errorf("--until: %w", err)
+			}
+
+			if follow {
+				return followLogs(logDir, sinceT)
+			}
+
+			filter := logger.QueryFilter{
+				Since:     sinceT,
+				Until:     untilT,
+				ToolName:  tool,
+				Method:    method,
+				SessionID: session,
+				Decision:  decision,
+				Limit:     limit,
+			}
+
+			entries, err := logger.Query(logDir, filter)
+			if err != nil {
+				return fmt.Errorf("query logs: %w", err)
+			}
+
+			if len(entries) == 0 {
+				fmt.Fprintln(os.Stderr, "No log entries found.")
+				return nil
+			}
+
+			// Reverse to chronological order (Query returns newest first).
+			for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+
+			if jsonOut {
+				for _, e := range entries {
+					b, _ := json.Marshal(e)
+					fmt.Println(string(b))
+				}
+				return nil
+			}
+
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			for _, e := range entries {
+				ts := e.Timestamp.Local().Format("2006-01-02 15:04:05")
+				size := formatLogSize(e.RawSize)
+				policy := ""
+				if e.PolicyDecision != "" {
+					policy = "[" + e.PolicyDecision + "]"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ts, e.Summary, size, policy)
+			}
+			w.Flush()
 			return nil
 		},
 	}
@@ -445,21 +511,152 @@ func newLogsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&decision, "decision", "", "Filter by policy decision (allow, deny, approve)")
 	cmd.Flags().IntVar(&limit, "limit", 50, "Max entries to show")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output raw JSON")
-	cmd.Flags().BoolVar(&follow, "follow", false, "Follow mode (live stream via WebSocket)")
-	cmd.Flags().IntVar(&port, "port", 7777, "API server port")
-
-	_ = since
-	_ = until
-	_ = tool
-	_ = method
-	_ = session
-	_ = decision
-	_ = limit
-	_ = jsonOut
-	_ = follow
-	_ = port
+	cmd.Flags().BoolVar(&follow, "follow", false, "Follow mode (tail the current log file)")
 
 	return cmd
+}
+
+// parseTimeArg parses --since / --until flag values into a *time.Time.
+// defaultOffset is applied when s is empty: 0 means "return nil" (no filter).
+func parseTimeArg(s string, defaultOffset time.Duration) (*time.Time, error) {
+	if s == "" {
+		if defaultOffset == 0 {
+			return nil, nil
+		}
+		t := time.Now().UTC().Add(defaultOffset)
+		return &t, nil
+	}
+	if s == "today" {
+		now := time.Now().UTC()
+		t := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		return &t, nil
+	}
+	if strings.HasSuffix(s, "h") {
+		n, err := strconv.Atoi(strings.TrimSuffix(s, "h"))
+		if err == nil {
+			t := time.Now().UTC().Add(-time.Duration(n) * time.Hour)
+			return &t, nil
+		}
+	}
+	if strings.HasSuffix(s, "d") {
+		n, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+		if err == nil {
+			t := time.Now().UTC().Add(-time.Duration(n) * 24 * time.Hour)
+			return &t, nil
+		}
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return nil, fmt.Errorf("unrecognised format %q (use 'today', '1h', '2d', or 'YYYY-MM-DD')", s)
+	}
+	return &t, nil
+}
+
+// formatLogSize formats a byte count for display.
+func formatLogSize(b int) string {
+	switch {
+	case b >= 1<<20:
+		return fmt.Sprintf("%.1fMB", float64(b)/float64(1<<20))
+	case b >= 1<<10:
+		return fmt.Sprintf("%.1fKB", float64(b)/float64(1<<10))
+	default:
+		return fmt.Sprintf("%dB", b)
+	}
+}
+
+// followLogs tails the current day's log file, printing new entries as they arrive.
+func followLogs(logDir string, since *time.Time) error {
+	day := time.Now().UTC().Format("2006-01-02")
+	path := filepath.Join(logDir, day+".jsonl")
+
+	// First, replay any existing entries matching the since filter.
+	if since != nil {
+		filter := logger.QueryFilter{Since: since, Limit: 200}
+		entries, err := logger.Query(logDir, filter)
+		if err == nil && len(entries) > 0 {
+			for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			for _, e := range entries {
+				ts := e.Timestamp.Local().Format("2006-01-02 15:04:05")
+				fmt.Fprintf(w, "%s\t%s\t%s\n", ts, e.Summary, formatLogSize(e.RawSize))
+			}
+			w.Flush()
+		}
+	}
+
+	// Open file and seek to end.
+	f, err := os.Open(path) //nolint:gosec
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("open log file: %w", err)
+	}
+	if f != nil {
+		if _, err := f.Seek(0, 2); err != nil {
+			f.Close()
+			return err
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, "Following logs... (Ctrl+C to stop)")
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	scanner := (*bufio.Scanner)(nil)
+	if f != nil {
+		scanner = bufio.NewScanner(f)
+	}
+
+	for range ticker.C {
+		// Reopen if file rotated to a new day.
+		newDay := time.Now().UTC().Format("2006-01-02")
+		if newDay != day {
+			if f != nil {
+				f.Close()
+			}
+			day = newDay
+			path = filepath.Join(logDir, day+".jsonl")
+			f, err = os.Open(path) //nolint:gosec
+			if err != nil {
+				f = nil
+				scanner = nil
+				continue
+			}
+			scanner = bufio.NewScanner(f)
+		}
+
+		// Open file if it didn't exist before.
+		if f == nil {
+			f, err = os.Open(path) //nolint:gosec
+			if err != nil {
+				continue
+			}
+			if _, err := f.Seek(0, 2); err != nil {
+				f.Close()
+				f = nil
+				continue
+			}
+			scanner = bufio.NewScanner(f)
+		}
+
+		// Read any new lines.
+		for scanner.Scan() {
+			line := scanner.Bytes()
+			if len(line) == 0 {
+				continue
+			}
+			var e logger.LogEntry
+			if err := json.Unmarshal(line, &e); err != nil {
+				continue
+			}
+			ts := e.Timestamp.Local().Format("2006-01-02 15:04:05")
+			fmt.Fprintf(w, "%s\t%s\t%s\n", ts, e.Summary, formatLogSize(e.RawSize))
+			w.Flush()
+		}
+	}
+	return nil
 }
 
 func newToolsCmd() *cobra.Command {
