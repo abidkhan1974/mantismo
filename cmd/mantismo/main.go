@@ -299,11 +299,8 @@ func newWrapCmd() *cobra.Command {
 									},
 								}
 							case policy.Allow:
-								fmt.Fprintf(os.Stderr, "[mantismo] ALLOW: %s — %s\n", req.ToolName, result.Reason)
 								// fall through to forward
 							case policy.Approve:
-								fmt.Fprintf(os.Stderr, "[mantismo] APPROVE: %s — %s (dashboard: %v)\n",
-									req.ToolName, result.Reason, wsBE.Available())
 								argSummary := ""
 								if len(req.Arguments) > 0 {
 									argSummary = string(req.Arguments)
