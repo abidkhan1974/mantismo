@@ -1,0 +1,93 @@
+version: 2
+
+project_name: mantismo
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mantismo
+    main: ./cmd/mantismo/
+    binary: mantismo
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: mantismo
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - LICENSE-COMMERCIAL
+      - README.md
+      - TROUBLESHOOTING.md
+
+checksum:
+  name_template: "checksums.txt"
+
+signs:
+  - artifacts: checksum
+    args:
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+    # Only sign if GPG_FINGERPRINT is set
+    if: '{{ if .Env.GPG_FINGERPRINT }}true{{ end }}'
+
+release:
+  github:
+    owner: abidkhan1974
+    name: mantismo
+  name_template: "v{{.Version}}"
+  draft: true
+  prerelease: auto
+
+brews:
+  - name: mantismo
+    homepage: https://github.com/abidkhan1974/mantismo
+    description: "MCP security proxy — audit, filter and approve AI agent tool calls"
+    license: "AGPL-3.0-only"
+    repository:
+      owner: abidkhan1974
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_author:
+      name: mantismo-bot
+      email: noreply@github.com
+    install: |
+      bin.install "mantismo"
+    test: |
+      system "#{bin}/mantismo", "--version"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
