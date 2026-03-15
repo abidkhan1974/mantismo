@@ -99,3 +99,58 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json
 ```
 
 If the `mantismo wrap` command is still present, it's working correctly.
+
+---
+
+## Approval popup never appears in the dashboard
+
+Several things must all be true for approvals to work:
+
+1. **Preset must be `balanced` or `paranoid`** — `permissive` never triggers approvals.
+   Check your config: `mantismo wrap --preset balanced -- <server-cmd>`
+
+2. **Dashboard must be open** *before* the tool call is made. The WebSocket backend is only
+   registered when a browser tab is connected. If no tab is open, the terminal backend is used
+   instead (approval prompt appears in the terminal/MCP log, not the browser).
+
+3. **Open a fresh Claude conversation** after changing config. Claude Desktop caches tool
+   definitions from the old session. Start a new conversation so it re-initializes.
+
+---
+
+## API server port conflict: `address already in use`
+
+If you run two `mantismo wrap` processes (e.g., during testing), the second one will fail to
+bind port 7777. As of v0.2.0 mantismo detects this and reuses the existing API server.
+
+If you hit this with an older binary, kill the first process and restart:
+
+```bash
+pkill -f "mantismo wrap"
+```
+
+---
+
+## Write tools bypass approval (one-time grant)
+
+When you approve a write tool call in the dashboard, it grants permission for that call only.
+The next call to the same tool requires a fresh approval. This is by design — use **Grant for session**
+if you want to allow repeated calls in the same session without re-approving.
+
+---
+
+## Claude reports it cannot access a path (e.g., `/tmp`)
+
+macOS resolves `/tmp` to `/private/tmp` at the filesystem level. If your MCP server is configured
+with `/tmp` as the allowed path, tool calls that reference `/private/tmp` may be rejected.
+
+Fix: use `/Users/<your-username>` or an absolute path that does not resolve to a symlink.
+
+---
+
+## Tool reads on new/changed servers require approval
+
+With the `balanced` preset, tool reads (`get_`, `list_`, etc.) on a *changed* server are allowed
+by default (reads are safe). Only writes and calls on changed servers require approval. If you see
+unexpected approvals for read tools right after changing a server version, rebuild and reinstall —
+earlier builds had this rule ordering wrong.
