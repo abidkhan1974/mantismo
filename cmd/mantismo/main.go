@@ -339,6 +339,17 @@ func newWrapCmd() *cobra.Command {
 									if grantErr != nil {
 										reason = grantErr.Error()
 									}
+									_ = log.Log(logger.LogEntry{
+										Timestamp:      time.Now().UTC(),
+										SessionID:      sessionID,
+										Direction:      "to_server",
+										MessageType:    "request",
+										Method:         "tools/call",
+										RawSize:        len(req.Arguments),
+										PolicyDecision: "deny",
+										Summary:        "â tools/call [DENIED: " + reason + "]",
+									})
+									sessions.IncrBlocked()
 									return interceptor.InterceptResult{
 										Action: interceptor.Block,
 										Error: &interceptor.JSONRPCError{
