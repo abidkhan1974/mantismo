@@ -162,7 +162,11 @@ func newWrapCmd() *cobra.Command {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			if err := apiSrv.Start(ctx); err != nil {
+			// If another mantismo is already holding the port, reuse it rather than failing.
+			existingClient := apiclient.NewClient(port)
+			if existingClient.Health() == nil {
+				fmt.Fprintf(os.Stderr, "[mantismo] API server already running on port %d — reusing\n", port)
+			} else if err := apiSrv.Start(ctx); err != nil {
 				return fmt.Errorf("start api server: %w", err)
 			}
 
