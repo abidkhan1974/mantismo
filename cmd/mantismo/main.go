@@ -291,6 +291,17 @@ func newWrapCmd() *cobra.Command {
 								fmt.Fprintf(os.Stderr,
 									"[mantismo] BLOCKED: %s — %s\n",
 									req.ToolName, result.Reason)
+								_ = log.Log(logger.LogEntry{
+									Timestamp:      time.Now().UTC(),
+									SessionID:      sessionID,
+									Direction:      "to_server",
+									MessageType:    "request",
+									Method:         "tools/call",
+									RawSize:        len(req.Arguments),
+									PolicyDecision: "deny",
+									Summary:        "→ tools/call [BLOCKED: " + result.Reason + "]",
+								})
+								sessions.IncrBlocked()
 								return interceptor.InterceptResult{
 									Action: interceptor.Block,
 									Error: &interceptor.JSONRPCError{
