@@ -80,6 +80,7 @@ func newWrapCmd() *cobra.Command {
 	var logLevel string
 	var noPolicy bool
 	var noVault bool
+	var vaultPassphrase string
 	var port int
 	var configPath string
 	var policyDir string
@@ -237,10 +238,31 @@ func newWrapCmd() *cobra.Command {
 			// ── Method correlator: maps requestID → method for response logging ──
 			var methodMap sync.Map
 
-			// ── Vault tools handler (nil vault = vault not initialized) ───────────
+			// ── Vault tools handler ───────────────────────────────────────────────
 			var vaultHandler *vaulttools.Handler
+			var openedVault *vault.Vault
 			if !noVault {
-				vaultHandler = vaulttools.NewHandler(nil, nil, vaulttools.Standard)
+				pass := vaultPassphrase
+				if pass == "" {
+					pass = os.Getenv("MANTISMO_VAULT_PASSPHRASE")
+				}
+				dbPath, vaultPathErr := vaultPath()
+				if vaultPathErr == nil && pass != "" {
+					if _, statErr := os.Stat(dbPath); statErr == nil {
+						// Vault DB exists and passphrase provided — open it.
+						if v, openErr := vault.Open(dbPath, pass); openErr == nil {
+							openedVault = v
+							fmt.Fprintf(os.Stderr, "[mantismo] vault: opened %s\n", dbPath)
+						} else {
+							fmt.Fprintf(os.Stderr, "[mantismo] vault: failed to open: %v\n", openErr)
+						}
+					} else {
+						fmt.Fprintf(os.Stderr, "[mantismo] vault: not initialized (run 'mantismo vault init' to set up)\n")
+					}
+				} else if pass == "" {
+					fmt.Fprintf(os.Stderr, "[mantismo] vault: no passphrase set — vault tools will return 'locked' (set MANTISMO_VAULT_PASSPHRASE or use --vault-passphrase)\n")
+				}
+				vaultHandler = vaulttools.NewHandler(openedVault, approvalGateway, vaulttools.Standard)
 			}
 
 			// ── Build interceptor hooks ───────────────────────────────────────────
@@ -461,6 +483,9 @@ func newWrapCmd() *cobra.Command {
 
 			stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer stopCancel()
+			if openedVault != nil {
+				_ = openedVault.Close()
+			}
 			return apiSrv.Stop(stopCtx)
 		},
 	}
@@ -469,6 +494,7 @@ func newWrapCmd() *cobra.Command {
 	cmd.Flags().StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warn, error")
 	cmd.Flags().BoolVar(&noPolicy, "no-policy", false, "Disable policy engine (logging only)")
 	cmd.Flags().BoolVar(&noVault, "no-vault", false, "Disable vault tools injection")
+	cmd.Flags().StringVar(&vaultPassphrase, "vault-passphrase", "", "Vault passphrase (or set MANTISMO_VAULT_PASSPHRASE env var)")
 	cmd.Flags().IntVar(&port, "port", 7777, "API server port")
 	cmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
 	cmd.Flags().StringVar(&policyDir, "policy-dir", "", "Directory containing .rego policy files (overrides preset)")
